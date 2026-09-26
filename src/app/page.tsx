@@ -1,67 +1,121 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { Monitor, UserCircle, Clock, Grid } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!username || !password) {
+      setErrorMsg('Username dan Password wajib diisi!');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Fetch user dari Supabase
+      const { data, error } = await supabase
+        .from('users')
+        .select('*, kelas(nama_kelas)')
+        .eq('username', username)
+        .eq('password', password)
+        .single();
+
+      if (error || !data) {
+        setErrorMsg('Username atau Password salah!');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.status_login === '1') {
+        setErrorMsg('Akun sedang aktif di perangkat lain! Minta admin untuk mereset sesi.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Update status login
+      await supabase.from('users').update({ status_login: '1' }).eq('id', data.id);
+      
+      // Catat log aktivitas (opsional)
+      await supabase.from('log').insert({ user_id: data.id, aktivitas: 'Login Aplikasi' });
+
+      // Simpan sesi di localStorage
+      localStorage.setItem('cbt_user', JSON.stringify(data));
+      
+      // Redirect ke halaman token ujian
+      router.push('/token');
+
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Terjadi kesalahan pada server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
+      {/* Header */}
+      <header className="bg-blue-800 text-white p-3 md:p-4 shadow-md flex justify-between items-center z-10">
+        <div className="flex items-center gap-2 md:gap-3">
+          <Monitor className="w-6 h-6 md:w-7 md:h-7" />
+          <h1 className="text-sm md:text-xl font-bold tracking-wider truncate">CBT B-TEK - Ujian Online</h1>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md border-t-4 border-blue-600">
+          <h2 className="text-2xl font-bold mb-6 text-center text-gray-700">LOGIN PESERTA</h2>
+          
+          <form onSubmit={handleLogin}>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-600 mb-2">Username</label>
+              <input 
+                type="text" 
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-600 mb-2">Password</label>
+              <input 
+                type="password" 
+                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            
+            <button 
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-bold transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Memproses...' : 'MASUK UJIAN'}
+            </button>
+            
+            {errorMsg && (
+              <p className="text-red-500 text-center mt-3 text-sm font-semibold">{errorMsg}</p>
+            )}
+          </form>
+
+          <p className="text-center text-xs text-gray-400 mt-6 pt-4 border-t border-gray-100">
+            CBT B-Tek dibuat oleh @budhii12 &copy; 2026
+          </p>
         </div>
       </main>
     </div>
