@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Users, Package, Archive, 
   FileText, PlusCircle, Trophy, PieChart, 
-  Settings, Server, Menu, X 
+  Settings, Server, Menu, X, LogOut, ChevronRight
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -27,35 +27,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-800 font-sans">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Modern Sidebar */}
       <aside 
         className={clsx(
-          "w-64 bg-blue-900 text-white flex flex-col shadow-xl z-30 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0",
+          "w-[280px] bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 border-r border-slate-800",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <button 
           onClick={() => setIsSidebarOpen(false)} 
-          className="absolute top-4 right-4 text-white md:hidden hover:text-red-400 transition"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden hover:bg-slate-800 p-1 rounded-lg transition-all"
         >
           <X size={24} />
         </button>
 
-        <div className="p-6 text-center border-b border-blue-800 flex flex-col items-center">
-          <Server size={36} className="mb-2 text-blue-200" />
-          <h1 className="text-lg font-bold">Admin Panel CBT</h1>
+        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+          <div className="bg-gradient-to-br from-indigo-500 to-teal-400 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
+            <Server size={28} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-white tracking-wide">CBT Admin</h1>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Control Panel</p>
+          </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 space-y-1 px-3">
+        <nav className="flex-1 overflow-y-auto py-6 space-y-1.5 px-4 custom-scrollbar">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Main Menu</p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;
@@ -66,40 +72,66 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.path}
                 onClick={() => setIsSidebarOpen(false)}
                 className={clsx(
-                  "flex items-center px-4 py-3 rounded font-semibold transition-all duration-300",
-                  isActive ? "bg-blue-700 text-white" : "hover:bg-blue-800 text-blue-100"
+                  "flex items-center justify-between px-3 py-3 rounded-xl font-medium transition-all duration-200 group",
+                  isActive 
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" 
+                    : "hover:bg-slate-800 hover:text-white"
                 )}
               >
-                <Icon size={20} className="mr-3" />
-                {item.name}
+                <div className="flex items-center gap-3">
+                  <Icon size={20} className={isActive ? "text-white" : "text-slate-400 group-hover:text-indigo-400"} />
+                  {item.name}
+                </div>
+                {isActive && <ChevronRight size={16} className="text-indigo-300" />}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 text-center text-xs text-blue-300 border-t border-blue-800">
-          CBT B-Tek dibuat oleh<br/>@budhii12 &copy; 2026
+        <div className="p-4 border-t border-slate-800">
+          <button className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group">
+            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> 
+            <span>Logout Admin</span>
+          </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
-        <header className="bg-white shadow p-4 flex justify-between items-center z-10">
-          <div className="flex items-center gap-3">
+        {/* Top Navbar */}
+        <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 p-4 flex justify-between items-center z-10 sticky top-0">
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)} 
-              className="text-blue-900 md:hidden hover:text-blue-700 transition"
+              className="text-slate-500 md:hidden hover:text-indigo-600 hover:bg-slate-100 p-1.5 rounded-lg transition-all"
             >
               <Menu size={24} />
             </button>
-            <h2 className="text-xl font-bold text-gray-800">
-              {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
-            </h2>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+                {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
+              </h2>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex flex-col items-end mr-2">
+              <span className="text-sm font-bold text-slate-800">Administrator</span>
+              <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold border-2 border-indigo-200">
+              AD
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6" id="mainContent">
-          {children}
+        {/* Dynamic Page Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar bg-slate-50" id="mainContent">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
         </div>
       </main>
     </div>
