@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { Info, LogOut, PackageSearch, KeySquare, PlayCircle } from 'lucide-react';
 
 export default function TokenPage() {
@@ -26,11 +27,12 @@ export default function TokenPage() {
   }, [router]);
 
   const fetchPaketAktif = async () => {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('paket')
       .select('*')
       .eq('status', 'Aktif');
       
+    data = filterDemoData(data, 'paket');
     if (data) {
       setPaketList(data);
     }

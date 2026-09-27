@@ -6,7 +6,7 @@ export function filterDemoData(data: any[] | null, tableName: string) {
     if (!savedUser) return data;
     
     const user = JSON.parse(savedUser);
-    const isDemo = user?.username?.startsWith('demo_admin_');
+    const isDemo = user?.username?.startsWith('demo_');
     const demoId = isDemo ? user.username.split('_').pop() : '';
 
     if (isDemo) {
