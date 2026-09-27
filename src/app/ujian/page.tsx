@@ -1,10 +1,196 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2 } from 'lucide-react';
 import clsx from 'clsx';
+import 'katex/dist/katex.min.css';
+
+// --- Komponen Interaktif Tarik Garis (Menjodohkan) ---
+const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
+  const [premis, setPremis] = useState<any[]>([]);
+  const [respons, setRespons] = useState<any[]>([]);
+  const [connections, setConnections] = useState<{premisId: string, responsId: string}[]>(jawabanData || []);
+  const [drawing, setDrawing] = useState<{premisId: string, startX: number, startY: number, curX: number, curY: number} | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const [dots, setDots] = useState<Record<string, {x: number, y: number}>>({});
+
+  useEffect(() => {
+    try {
+      setPremis(JSON.parse(soal.opsi_a || '[]'));
+      const r = JSON.parse(soal.opsi_b || '[]');
+      // Acak urutan respons agar ujian menantang
+      setRespons(r.sort(() => Math.random() - 0.5));
+    } catch(e) {}
+    setConnections(jawabanData || []);
+  }, [soal]);
+
+  useEffect(() => {
+    onChange(connections);
+  }, [connections]);
+
+  const updateDots = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const newDots: Record<string, {x: number, y: number}> = {};
+    
+    premis.forEach(p => {
+      const el = document.getElementById(`dot-premis-${p.id}`);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        newDots[`premis-${p.id}`] = { x: elRect.left - rect.left + elRect.width / 2, y: elRect.top - rect.top + elRect.height / 2 };
+      }
+    });
+    
+    respons.forEach(r => {
+      const el = document.getElementById(`dot-respons-${r.id}`);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        newDots[`respons-${r.id}`] = { x: elRect.left - rect.left + elRect.width / 2, y: elRect.top - rect.top + elRect.height / 2 };
+      }
+    });
+    setDots(newDots);
+  };
+
+  useEffect(() => {
+    updateDots();
+    window.addEventListener('resize', updateDots);
+    const timer = setTimeout(updateDots, 800); // Tunggu render rich-text images
+    return () => {
+      window.removeEventListener('resize', updateDots);
+      clearTimeout(timer);
+    };
+  }, [premis, respons]);
+
+  const handlePointerDown = (e: React.PointerEvent, id: string) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const startX = e.clientX - rect.left;
+    const startY = e.clientY - rect.top;
+    
+    // Hapus koneksi lama dari premis ini jika ada
+    setConnections(prev => prev.filter(c => c.premisId !== id));
+    setDrawing({ premisId: id, startX, startY, curX: startX, curY: startY });
+    
+    // Tangkap pointer agar pergerakan cepat tetap terdeteksi
+    (e.target as Element).releasePointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!drawing || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDrawing({
+      ...drawing,
+      curX: e.clientX - rect.left,
+      curY: e.clientY - rect.top
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!drawing) return;
+    
+    // Sembunyikan SVG sementara untuk mendeteksi elemen di bawah kursor
+    const svgEl = document.getElementById('svg-overlay');
+    if (svgEl) svgEl.style.display = 'none';
+    
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    
+    if (svgEl) svgEl.style.display = 'block';
+
+    const dropZone = target?.closest('[data-respons-id]');
+    
+    if (dropZone) {
+      const responsId = dropZone.getAttribute('data-respons-id');
+      if (responsId) {
+        setConnections(prev => {
+          // Hanya izinkan 1 koneksi per respons juga
+          const filtered = prev.filter(c => c.responsId !== responsId && c.premisId !== drawing.premisId);
+          return [...filtered, { premisId: drawing.premisId, responsId }];
+        });
+      }
+    }
+    setDrawing(null);
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      className="relative w-full flex flex-col md:flex-row gap-8 md:gap-24 select-none touch-none min-h-[400px] p-4 bg-slate-50/50 rounded-2xl border border-slate-100"
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+    >
+      <div className="absolute inset-x-0 top-0 text-center -mt-3 text-xs font-bold text-slate-400 bg-white inline-block px-4 border rounded-full mx-auto w-max shadow-sm">
+        Tarik titik dari kotak Kiri ke kotak Kanan (Klik garis untuk menghapus)
+      </div>
+
+      <svg id="svg-overlay" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 10 }}>
+        {connections.map(conn => {
+          const pDot = dots[`premis-${conn.premisId}`];
+          const rDot = dots[`respons-${conn.responsId}`];
+          if (!pDot || !rDot) return null;
+          return (
+            <line 
+              key={`${conn.premisId}-${conn.responsId}`}
+              x1={pDot.x} y1={pDot.y} x2={rDot.x} y2={rDot.y}
+              stroke="#4f46e5" strokeWidth="4" strokeLinecap="round"
+              className="pointer-events-auto cursor-pointer hover:stroke-rose-500 transition-colors"
+              onClick={() => setConnections(prev => prev.filter(c => c !== conn))}
+            />
+          );
+        })}
+        {drawing && (
+          <line 
+            x1={drawing.startX} y1={drawing.startY} x2={drawing.curX} y2={drawing.curY}
+            stroke="#818cf8" strokeWidth="4" strokeDasharray="5,5" strokeLinecap="round"
+          />
+        )}
+      </svg>
+
+      {/* Kolom Kiri: Premis */}
+      <div className="flex-1 flex flex-col gap-4 z-20 relative">
+        <h3 className="font-bold text-slate-500 text-sm tracking-wider uppercase mb-2 flex items-center gap-2"><Link2 size={16}/> PREMIS</h3>
+        {premis.map(p => (
+          <div key={p.id} className="relative bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center group">
+            <div dangerouslySetInnerHTML={{ __html: p.text }} className="flex-1 prose prose-slate prose-sm mr-4" />
+            <div 
+              id={`dot-premis-${p.id}`}
+              onPointerDown={(e) => handlePointerDown(e, p.id)}
+              className={clsx(
+                "w-6 h-6 rounded-full cursor-grab active:cursor-grabbing border-4 flex-shrink-0 transition-all",
+                connections.some(c => c.premisId === p.id) ? "bg-indigo-600 border-indigo-200 ring-4 ring-indigo-100" : "bg-white border-slate-300 hover:border-indigo-400 hover:scale-110"
+              )}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Kolom Kanan: Respons */}
+      <div className="flex-1 flex flex-col gap-4 z-20 relative">
+        <h3 className="font-bold text-slate-500 text-sm tracking-wider uppercase mb-2 text-right">RESPONS</h3>
+        {respons.map(r => (
+          <div 
+            key={r.id} 
+            data-respons-id={r.id}
+            className="relative bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center group transition-colors hover:border-indigo-300"
+          >
+            <div 
+              id={`dot-respons-${r.id}`}
+              className={clsx(
+                "w-6 h-6 rounded-full border-4 flex-shrink-0 ml-1 mr-4 transition-all",
+                connections.some(c => c.responsId === r.id) ? "bg-indigo-600 border-indigo-200 ring-4 ring-indigo-100" : "bg-white border-slate-300"
+              )}
+            />
+            <div dangerouslySetInnerHTML={{ __html: r.text }} className="flex-1 prose prose-slate prose-sm" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+// -----------------------------------------------------------
 
 export default function UjianPage() {
   const [user, setUser] = useState<any>(null);
@@ -74,13 +260,68 @@ export default function UjianPage() {
   const handleSelesai = async () => {
     if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian? Anda tidak bisa mengulangi ujian ini lagi.')) return;
     
+    // --- Kalkulasi Skor ---
+    let totalSkorBenar = 0;
+    let totalSkorMaks = 0;
+
+    soalList.forEach(soal => {
+      const bobot = soal.skor_maks || 10;
+      totalSkorMaks += bobot;
+      
+      const jwbSiswa = jawaban[soal.id];
+      if (!jwbSiswa) return;
+      
+      if (soal.tipe === 'PG') {
+        if (jwbSiswa === soal.kunci?.toUpperCase()) totalSkorBenar += bobot;
+      } 
+      else if (soal.tipe === 'PG Kompleks') {
+        const kunciArr = (soal.kunci || '').split(',').map((k: string) => k.trim().toUpperCase());
+        let benarCount = 0;
+        if (Array.isArray(jwbSiswa)) {
+           jwbSiswa.forEach(j => {
+             if (kunciArr.includes(j)) benarCount++;
+           });
+           // Skor proporsional
+           if (kunciArr.length > 0) {
+             totalSkorBenar += (benarCount / kunciArr.length) * bobot;
+           }
+        }
+      }
+      else if (soal.tipe === 'Menjodohkan') {
+        try {
+          const kunciAsli = JSON.parse(soal.kunci || '[]');
+          let benarCount = 0;
+          if (Array.isArray(jwbSiswa)) {
+             jwbSiswa.forEach((j: any) => {
+               if (kunciAsli.find((k:any) => k.premisId === j.premisId && k.responsId === j.responsId)) {
+                 benarCount++;
+               }
+             });
+          }
+          if (kunciAsli.length > 0) {
+             totalSkorBenar += (benarCount / kunciAsli.length) * bobot;
+          }
+        } catch(e) {}
+      }
+      else if (soal.tipe === 'Isian') {
+         if (soal.kunci && jwbSiswa.toLowerCase().trim() === soal.kunci.toLowerCase().trim()) {
+            totalSkorBenar += bobot;
+         }
+      }
+    });
+
+    // Skala 100
+    const skorAkhir = totalSkorMaks > 0 ? Math.round((totalSkorBenar / totalSkorMaks) * 100) : 0;
+    // -----------------------
+
     try {
       await supabase.from('hasil').insert({
         user_id: user.id,
         paket_id: paket.id,
         waktu_sisa: sisaWaktu,
         detail_jawaban: jawaban,
-        status_koreksi: 'Selesai'
+        status_koreksi: 'Selesai',
+        skor_akhir: skorAkhir
       });
 
       await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0' }).eq('id', user.id);
@@ -104,10 +345,19 @@ export default function UjianPage() {
   }
 
   const soalAktif = soalList[indexSoal];
-  const isTimeCritical = sisaWaktu < 300; // Kurang dari 5 menit
+  const isTimeCritical = sisaWaktu < 300; 
+
+  // Global styles for rich text
+  const richTextGlobalStyles = `
+    .prose img { max-width: 100%; border-radius: 8px; }
+    .prose p { margin-top: 0; margin-bottom: 1em; }
+    .prose p:last-child { margin-bottom: 0; }
+  `;
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+      <style dangerouslySetInnerHTML={{__html: richTextGlobalStyles}} />
+      
       {/* Premium Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 p-3 md:p-4 shadow-sm flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -121,12 +371,9 @@ export default function UjianPage() {
         </div>
         
         <div className="flex items-center gap-3 md:gap-5 text-xs md:text-base flex-shrink-0">
-          {/* Timer */}
           <div className={clsx(
             "px-4 py-2 rounded-full font-black shadow-sm flex items-center gap-2 border transition-colors duration-500",
-            isTimeCritical 
-              ? "bg-red-50 text-red-600 border-red-200 animate-pulse" 
-              : "bg-indigo-50 text-indigo-700 border-indigo-100"
+            isTimeCritical ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-indigo-50 text-indigo-700 border-indigo-100"
           )}>
             <Clock size={18} className={isTimeCritical ? "animate-bounce" : ""} />
             <span className="tracking-wider">{formatTime(sisaWaktu)}</span>
@@ -135,19 +382,15 @@ export default function UjianPage() {
           <button 
             onClick={() => setIsNavOpen(!isNavOpen)} 
             className="text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 p-2 rounded-lg border border-slate-200 transition-all active:scale-95"
-            title="Navigasi Soal"
           >
             <Grid size={22} />
           </button>
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden max-w-7xl mx-auto w-full">
-        
-        {/* Area Soal */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col pb-24 md:pb-8 scroll-smooth">
-          {/* Question Card */}
           <div className="bg-white p-6 md:p-10 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 flex-1 relative flex flex-col transition-all duration-300">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
               <div className="flex items-center gap-3">
@@ -163,53 +406,67 @@ export default function UjianPage() {
             
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
               <div 
-                className="text-base md:text-xl text-slate-800 mb-8 leading-relaxed font-medium prose prose-slate max-w-none"
+                className="text-base md:text-lg text-slate-800 mb-8 leading-relaxed font-medium prose prose-slate max-w-none prose-p:my-1"
                 dangerouslySetInnerHTML={{ __html: soalAktif.pertanyaan }} 
               />
               
               {/* Pilihan Ganda */}
-              {soalAktif.tipe === 'PG' && (
+              {(soalAktif.tipe === 'PG' || soalAktif.tipe === 'PG Kompleks') && (
                 <div className="space-y-4">
                   {['a', 'b', 'c', 'd', 'e'].map((opt) => {
                     const key = `opsi_${opt}` as keyof typeof soalAktif;
-                    if (!soalAktif[key]) return null;
-                    const isSelected = jawaban[soalAktif.id] === opt.toUpperCase();
+                    if (!soalAktif[key] || soalAktif[key].trim() === '<p><br></p>') return null;
+                    const isSelected = soalAktif.tipe === 'PG Kompleks' 
+                      ? (jawaban[soalAktif.id] || []).includes(opt.toUpperCase())
+                      : jawaban[soalAktif.id] === opt.toUpperCase();
+
+                    const handleCheck = () => {
+                      if (soalAktif.tipe === 'PG Kompleks') {
+                        const currentArr = jawaban[soalAktif.id] || [];
+                        if (isSelected) {
+                          handleJawaban(soalAktif.id, currentArr.filter((a:string) => a !== opt.toUpperCase()));
+                        } else {
+                          handleJawaban(soalAktif.id, [...currentArr, opt.toUpperCase()]);
+                        }
+                      } else {
+                        handleJawaban(soalAktif.id, opt.toUpperCase());
+                      }
+                    };
 
                     return (
                       <label 
                         key={opt}
                         className={clsx(
                           "group flex items-start gap-4 p-4 md:p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 ease-in-out",
-                          isSelected 
-                            ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-100" 
-                            : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
+                          isSelected ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-100" : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
                         )}
                       >
                         <div className="relative flex items-center justify-center pt-1">
                           <input 
-                            type="radio" 
+                            type={soalAktif.tipe === 'PG Kompleks' ? "checkbox" : "radio"} 
                             name={`soal_${soalAktif.id}`}
-                            value={opt.toUpperCase()}
                             checked={isSelected}
-                            onChange={(e) => handleJawaban(soalAktif.id, e.target.value)}
+                            onChange={handleCheck}
                             className="sr-only"
                           />
                           <div className={clsx(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                            "w-6 h-6 border-2 flex items-center justify-center transition-all",
+                            soalAktif.tipe === 'PG Kompleks' ? "rounded-md" : "rounded-full",
                             isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300 group-hover:border-indigo-400"
                           )}>
-                            {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-full scale-100 transition-transform"></div>}
+                            {isSelected && (
+                              soalAktif.tipe === 'PG Kompleks' 
+                                ? <CheckCircle2 size={16} className="text-white"/>
+                                : <div className="w-2.5 h-2.5 bg-white rounded-full scale-100 transition-transform"></div>
+                            )}
                           </div>
                         </div>
-                        <div className="flex-1 flex gap-3">
-                          <span className={clsx(
-                            "font-black text-lg",
-                            isSelected ? "text-indigo-700" : "text-slate-400 group-hover:text-indigo-500"
-                          )}>
+                        <div className="flex-1 flex gap-3 overflow-hidden">
+                          <span className={clsx("font-black text-lg", isSelected ? "text-indigo-700" : "text-slate-400 group-hover:text-indigo-500")}>
                             {opt.toUpperCase()}.
                           </span>
                           <div dangerouslySetInnerHTML={{ __html: soalAktif[key] }} className={clsx(
-                            "flex-1 pt-1",
+                            "flex-1 prose prose-slate prose-sm overflow-hidden",
                             isSelected ? "text-indigo-900 font-medium" : "text-slate-700"
                           )} />
                         </div>
@@ -219,18 +476,24 @@ export default function UjianPage() {
                 </div>
               )}
 
+              {/* Menjodohkan */}
+              {soalAktif.tipe === 'Menjodohkan' && (
+                <JodohkanInteractive 
+                  soal={soalAktif} 
+                  jawabanData={jawaban[soalAktif.id]} 
+                  onChange={(data: any) => handleJawaban(soalAktif.id, data)}
+                />
+              )}
+
               {/* Essay */}
               {(soalAktif.tipe === 'Isian' || soalAktif.tipe === 'Essay') && (
-                <div className="relative group">
+                <div className="relative group mt-4">
                   <textarea 
                     className="w-full border-2 border-slate-200 p-5 rounded-xl text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all min-h-[200px] resize-y text-lg"
                     placeholder="Ketik jawaban lengkap Anda di sini..."
                     value={jawaban[soalAktif.id] || ''}
                     onChange={(e) => handleJawaban(soalAktif.id, e.target.value)}
                   />
-                  <div className="absolute bottom-4 right-4 text-xs font-bold text-slate-300 group-focus-within:text-indigo-300 transition-colors">
-                    {jawaban[soalAktif.id]?.length || 0} karakter
-                  </div>
                 </div>
               )}
             </div>
@@ -250,9 +513,7 @@ export default function UjianPage() {
               onClick={() => toggleRagu(soalAktif.id)}
               className={clsx(
                 "px-4 py-3.5 md:px-8 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold transition-all active:scale-95",
-                ragu[soalAktif.id] 
-                  ? "bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600" 
-                  : "bg-white border border-amber-200 text-amber-600 hover:bg-amber-50"
+                ragu[soalAktif.id] ? "bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600" : "bg-white border border-amber-200 text-amber-600 hover:bg-amber-50"
               )}
             >
               <HelpCircle size={20} className={ragu[soalAktif.id] ? "fill-amber-600/20" : ""} /> 
@@ -269,12 +530,9 @@ export default function UjianPage() {
           </div>
         </div>
 
-        {/* Navigation Sidebar */}
+        {/* Sidebar Nav */}
         {isNavOpen && (
-          <div 
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity" 
-            onClick={() => setIsNavOpen(false)} 
-          />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity" onClick={() => setIsNavOpen(false)} />
         )}
         <div className={clsx(
           "fixed md:relative right-0 top-0 h-full w-[280px] md:w-[320px] bg-white border-l border-slate-200 p-5 flex flex-col shadow-2xl md:shadow-none z-50 transition-transform duration-300 ease-out transform",
@@ -292,7 +550,14 @@ export default function UjianPage() {
           <div className="grid grid-cols-5 gap-2.5 flex-grow overflow-y-auto content-start pb-4 pr-1 custom-scrollbar">
             {soalList.map((soal, i) => {
               const isCurrent = i === indexSoal;
-              const hasAnswer = jawaban[soal.id] && jawaban[soal.id].trim() !== '';
+              let hasAnswer = false;
+              if (soal.tipe === 'Menjodohkan') {
+                hasAnswer = jawaban[soal.id] && jawaban[soal.id].length > 0;
+              } else if (soal.tipe === 'PG Kompleks') {
+                hasAnswer = jawaban[soal.id] && jawaban[soal.id].length > 0;
+              } else {
+                hasAnswer = jawaban[soal.id] && jawaban[soal.id].trim() !== '';
+              }
               const isRagu = ragu[soal.id];
 
               return (
@@ -302,11 +567,9 @@ export default function UjianPage() {
                   className={clsx(
                     "aspect-square rounded-xl font-bold text-sm flex items-center justify-center transition-all duration-200",
                     isCurrent ? "ring-4 ring-indigo-500/30 scale-110 z-10" : "hover:scale-105",
-                    isRagu 
-                      ? "bg-amber-400 text-amber-900 shadow-sm shadow-amber-400/40" 
-                      : hasAnswer 
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/40" 
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    isRagu ? "bg-amber-400 text-amber-900 shadow-sm shadow-amber-400/40" 
+                      : hasAnswer ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/40" 
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   )}
                 >
                   {i + 1}
@@ -316,13 +579,6 @@ export default function UjianPage() {
           </div>
 
           <div className="pt-5 border-t border-slate-100 mt-auto space-y-4">
-            {/* Status Legend */}
-            <div className="flex justify-center gap-4 text-xs font-semibold text-slate-500">
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-indigo-600"></div> Dijawab</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-amber-400"></div> Ragu</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-slate-200 border border-slate-300"></div> Kosong</div>
-            </div>
-            
             <button 
               onClick={handleSelesai}
               className={clsx(

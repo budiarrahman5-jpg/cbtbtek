@@ -53,8 +53,8 @@ export default function AnalisisSoalPage() {
   };
 
   // Fungsi untuk render sel matriks
-  const renderSelMatriks = (soal: any, jawabanSiswa: string) => {
-    if (!jawabanSiswa || jawabanSiswa.trim() === '') {
+  const renderSelMatriks = (soal: any, jawabanSiswa: any) => {
+    if (!jawabanSiswa || (typeof jawabanSiswa === 'string' && jawabanSiswa.trim() === '') || (Array.isArray(jawabanSiswa) && jawabanSiswa.length === 0)) {
       return (
         <td key={soal.id} className="p-2 border border-slate-200 text-center bg-slate-50">
           <Minus size={16} className="text-slate-300 mx-auto" />
@@ -62,8 +62,8 @@ export default function AnalisisSoalPage() {
       );
     }
 
-    if (soal.tipe === 'PG' || soal.tipe === 'PG Kompleks') {
-      const isCorrect = jawabanSiswa.toUpperCase() === soal.kunci?.toUpperCase();
+    if (soal.tipe === 'PG') {
+      const isCorrect = typeof jawabanSiswa === 'string' && jawabanSiswa.toUpperCase() === soal.kunci?.toUpperCase();
       return (
         <td 
           key={soal.id} 
@@ -77,19 +77,67 @@ export default function AnalisisSoalPage() {
       );
     }
 
+    if (soal.tipe === 'PG Kompleks') {
+      const isCorrect = Array.isArray(jawabanSiswa) && jawabanSiswa.sort().join(',') === (soal.kunci || '').split(',').map((k:string)=>k.trim().toUpperCase()).sort().join(',');
+      return (
+        <td 
+          key={soal.id} 
+          className={clsx(
+            "p-2 border border-slate-200 text-center font-bold text-sm",
+            isCorrect ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
+          )}
+        >
+          {Array.isArray(jawabanSiswa) ? jawabanSiswa.join(', ') : jawabanSiswa}
+        </td>
+      );
+    }
+    
+    if (soal.tipe === 'Menjodohkan') {
+      let benarCount = 0;
+      let totalKunci = 0;
+      try {
+        const kunciAsli = JSON.parse(soal.kunci || '[]');
+        totalKunci = kunciAsli.length;
+        if (Array.isArray(jawabanSiswa)) {
+           jawabanSiswa.forEach((j: any) => {
+             if (kunciAsli.find((k:any) => k.premisId === j.premisId && k.responsId === j.responsId)) {
+               benarCount++;
+             }
+           });
+        }
+      } catch(e) {}
+      
+      const isFullCorrect = benarCount === totalKunci && totalKunci > 0;
+      const isPartial = benarCount > 0 && benarCount < totalKunci;
+
+      return (
+        <td 
+          key={soal.id} 
+          className={clsx(
+            "p-2 border border-slate-200 text-center font-bold text-xs",
+            isFullCorrect ? "bg-emerald-50 text-emerald-600" : isPartial ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-500"
+          )}
+          title={`Benar ${benarCount} dari ${totalKunci} koneksi`}
+        >
+          {benarCount}/{totalKunci}
+        </td>
+      );
+    }
+
     // Untuk Essay / Isian
-    const isCorrect = soal.kunci && jawabanSiswa.toLowerCase().includes(soal.kunci.toLowerCase());
+    const jawabanString = String(jawabanSiswa);
+    const isCorrect = soal.kunci && jawabanString.toLowerCase().includes(soal.kunci.toLowerCase());
     return (
       <td 
         key={soal.id} 
         className="p-2 border border-slate-200 text-center relative group"
       >
         <div className="w-16 mx-auto truncate text-xs text-slate-600 font-medium">
-          {jawabanSiswa}
+          {jawabanString}
         </div>
         {/* Tooltip untuk essay yang panjang */}
         <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 w-48 bg-slate-800 text-white text-xs p-2 rounded shadow-lg hidden group-hover:block whitespace-normal">
-          {jawabanSiswa}
+          {jawabanString}
         </div>
       </td>
     );
