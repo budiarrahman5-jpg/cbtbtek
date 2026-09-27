@@ -19,16 +19,25 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
 
   useEffect(() => {
     try {
-      const pData = typeof soal.opsi_a === 'string' ? JSON.parse(soal.opsi_a || '[]') : (soal.opsi_a || []);
-      const rData = typeof soal.opsi_b === 'string' ? JSON.parse(soal.opsi_b || '[]') : (soal.opsi_b || []);
+      let pData = typeof soal.opsi_a === 'string' ? JSON.parse(soal.opsi_a || '[]') : (soal.opsi_a || []);
+      let rData = typeof soal.opsi_b === 'string' ? JSON.parse(soal.opsi_b || '[]') : (soal.opsi_b || []);
+      
+      // Enforce array type to prevent crash on .map or spread
+      pData = Array.isArray(pData) ? pData : [];
+      rData = Array.isArray(rData) ? rData : [];
+
       setPremis(pData);
       // Acak urutan respons agar ujian menantang
       setRespons([...rData].sort(() => Math.random() - 0.5));
     } catch(e) {
       console.error("Gagal parse opsi menjodohkan:", e, soal.opsi_a);
+      setPremis([]);
+      setRespons([]);
     }
-    setConnections(jawabanData || []);
-  }, [soal]);
+    
+    // Ensure connections is an array
+    setConnections(Array.isArray(jawabanData) ? jawabanData : []);
+  }, [soal, jawabanData]);
 
   useEffect(() => {
     onChange(connections);

@@ -86,6 +86,17 @@ export default function KelolaPaketPage() {
 
   return (
     <div className="space-y-6">
+      {isDemo && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm mb-6 flex items-start gap-3">
+          <div className="bg-red-100 p-2 rounded-full mt-0.5 text-red-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div>
+            <h3 className="text-red-800 font-bold text-sm">Mode Akun Demo</h3>
+            <p className="text-red-600 text-xs mt-1">Akun Anda adalah akun demo. Anda tidak diizinkan untuk menambah atau mengedit paket ujian. Fitur aksi disembunyikan.</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Package className="text-blue-600" /> Daftar Paket Soal
