@@ -19,11 +19,14 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
 
   useEffect(() => {
     try {
-      setPremis(JSON.parse(soal.opsi_a || '[]'));
-      const r = JSON.parse(soal.opsi_b || '[]');
+      const pData = typeof soal.opsi_a === 'string' ? JSON.parse(soal.opsi_a || '[]') : (soal.opsi_a || []);
+      const rData = typeof soal.opsi_b === 'string' ? JSON.parse(soal.opsi_b || '[]') : (soal.opsi_b || []);
+      setPremis(pData);
       // Acak urutan respons agar ujian menantang
-      setRespons(r.sort(() => Math.random() - 0.5));
-    } catch(e) {}
+      setRespons([...rData].sort(() => Math.random() - 0.5));
+    } catch(e) {
+      console.error("Gagal parse opsi menjodohkan:", e, soal.opsi_a);
+    }
     setConnections(jawabanData || []);
   }, [soal]);
 
