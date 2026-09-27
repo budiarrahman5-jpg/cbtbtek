@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, Activity, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, Activity, ArrowUpCircle, ArrowDownCircle, Save, Shield } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell
@@ -24,10 +24,62 @@ export default function AdminDashboard() {
   const [distribusiData, setDistribusiData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // State for Admin Account
+  const [adminUser, setAdminUser] = useState<any>(null);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
     fetchStats();
+    checkAdmin();
   }, []);
+
+  const checkAdmin = async () => {
+    const savedUser = localStorage.getItem('cbt_user');
+    if (savedUser) {
+      const u = JSON.parse(savedUser);
+      setIsDemo(u?.username?.startsWith('demo_'));
+      setAdminUser(u);
+      
+      // Fetch current password from DB
+      const { data } = await supabase.from('users').select('username, password').eq('id', u.id).single();
+      if (data) {
+        setNewUsername(data.username);
+        setNewPassword(data.password);
+      }
+    }
+  };
+
+  const simpanAkunAdmin = async () => {
+    if (isDemo) {
+      alert('Fitur Ubah Username & Password dinonaktifkan untuk Akun Demo!');
+      return;
+    }
+    if (!newUsername || !newPassword) {
+      alert('Username dan Password tidak boleh kosong!');
+      return;
+    }
+    if (!adminUser) return;
+
+    if (!confirm('Apakah Anda yakin ingin mengubah kredensial Admin?')) return;
+
+    const { error } = await supabase
+      .from('users')
+      .update({ username: newUsername, password: newPassword })
+      .eq('id', adminUser.id);
+
+    if (error) {
+      alert('Gagal mengubah data akun admin!');
+    } else {
+      alert('Berhasil mengubah Username & Password Admin! Silakan login kembali dengan data baru saat sesi berakhir.');
+      // Update local storage
+      const updatedUser = { ...adminUser, username: newUsername };
+      localStorage.setItem('cbt_user', JSON.stringify(updatedUser));
+      setAdminUser(updatedUser);
+    }
+  };
 
   const fetchStats = async () => {
     setIsLoading(true);
@@ -146,6 +198,55 @@ export default function AdminDashboard() {
           <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
           <span>{isRefreshing ? 'Menyinkronkan...' : 'Sinkronkan Data'}</span>
         </button>
+      </div>
+
+      {/* Pengaturan Akun Admin */}
+      <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100">
+        <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+          <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
+            <Shield size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-800">Pengaturan Akun Admin</h2>
+            <p className="text-sm font-medium text-slate-500">Ubah username dan password untuk login ke panel admin.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Username Admin</label>
+            <input 
+              type="text" 
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              disabled={isDemo}
+              className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Password Admin</label>
+            <input 
+              type="text" 
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              disabled={isDemo}
+              className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <button 
+            onClick={simpanAkunAdmin}
+            disabled={isDemo}
+            className="bg-slate-800 hover:bg-slate-900 text-white disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-slate-800/20"
+          >
+            <Save size={20} /> Simpan Perubahan Akun
+          </button>
+          {isDemo && (
+            <p className="text-rose-500 text-sm font-bold mt-3">*Fitur ini dinonaktifkan untuk Akun Demo agar tidak mengunci admin lain.</p>
+          )}
+        </div>
       </div>
 
       {/* Info Cards Row 1 */}
