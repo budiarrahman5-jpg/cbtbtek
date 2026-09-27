@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import 'react-quill-new/dist/quill.snow.css';
@@ -37,7 +38,8 @@ export default function TambahSoalPage() {
   }, []);
 
   const fetchPaket = async () => {
-    const { data } = await supabase.from('paket').select('*').neq('status', 'Diarsipkan');
+    let { data } = await supabase.from('paket').select('*').neq('status', 'Diarsipkan');
+    data = filterDemoData(data, 'paket');
     if (data) setPaketList(data);
   };
 

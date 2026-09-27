@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { PieChart, Search, Download, FileSpreadsheet, Check, X, Minus } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -17,7 +18,8 @@ export default function AnalisisSoalPage() {
   }, []);
 
   const fetchPaket = async () => {
-    const { data } = await supabase.from('paket').select('*').order('nama_paket');
+    let { data } = await supabase.from('paket').select('*').order('nama_paket');
+    data = filterDemoData(data, 'paket');
     if (data) setPaketList(data);
   };
 
@@ -30,21 +32,23 @@ export default function AnalisisSoalPage() {
     setIsLoading(true);
     
     // 1. Ambil daftar soal untuk header tabel
-    const { data: dataSoal } = await supabase
+    let { data: dataSoal } = await supabase
       .from('soal')
-      .select('id, kunci, tipe')
+      .select('id, kunci, tipe, paket(nama_paket)')
       .eq('paket_id', selectedPaket)
       .order('id', { ascending: true }); // Pastikan urutannya konsisten
       
+    dataSoal = filterDemoData(dataSoal, 'soal');
     if (dataSoal) setSoalList(dataSoal);
 
     // 2. Ambil semua hasil dari paket ini
-    const { data: hasilData } = await supabase
+    let { data: hasilData } = await supabase
       .from('hasil')
-      .select('detail_jawaban, skor_akhir, users(nama)')
+      .select('detail_jawaban, skor_akhir, users(nama, username)')
       .eq('paket_id', selectedPaket)
       .order('skor_akhir', { ascending: false });
 
+    hasilData = filterDemoData(hasilData, 'hasil');
     if (hasilData) {
       setAnalisis(hasilData);
     }

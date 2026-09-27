@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { List, Edit, Trash2 } from 'lucide-react';
 
 export default function KelolaSoalPage() {
@@ -20,7 +21,8 @@ export default function KelolaSoalPage() {
   }, [selectedPaket]);
 
   const fetchPaket = async () => {
-    const { data } = await supabase.from('paket').select('*');
+    let { data } = await supabase.from('paket').select('*');
+    data = filterDemoData(data, 'paket');
     if (data) setPaketList(data);
   };
 
@@ -32,7 +34,8 @@ export default function KelolaSoalPage() {
       query = query.eq('paket_id', selectedPaket);
     }
     
-    const { data } = await query;
+    let { data } = await query;
+    data = filterDemoData(data, 'soal');
     if (data) setSoal(data);
     setIsLoading(false);
   };

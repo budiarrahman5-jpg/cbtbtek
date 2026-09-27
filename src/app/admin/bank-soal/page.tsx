@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { Archive, Edit, Trash2 } from 'lucide-react';
 
 export default function BankSoalPage() {
@@ -14,8 +15,8 @@ export default function BankSoalPage() {
 
   const fetchBankSoal = async () => {
     setIsLoading(true);
-    // Mengambil paket yang diarsipkan atau semua paket untuk tujuan arsip bank soal
-    const { data } = await supabase.from('paket').select('*').order('created_at', { ascending: false });
+    let { data } = await supabase.from('paket').select('*').order('created_at', { ascending: false });
+    data = filterDemoData(data, 'paket');
     if (data) setPaket(data);
     setIsLoading(false);
   };

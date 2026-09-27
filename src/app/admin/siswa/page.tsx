@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -32,15 +33,18 @@ export default function KelolaSiswaPage() {
     setIsLoading(true);
     
     // Fetch Kelas
-    const { data: dataKelas } = await supabase.from('kelas').select('*').order('nama_kelas');
+    let { data: dataKelas } = await supabase.from('kelas').select('*').order('nama_kelas');
+    dataKelas = filterDemoData(dataKelas, 'kelas');
     if (dataKelas) setKelas(dataKelas);
     
     // Fetch Siswa
-    const { data: dataSiswa } = await supabase
+    let { data: dataSiswa } = await supabase
       .from('users')
       .select('*, kelas(nama_kelas)')
       .eq('role', 'siswa')
       .order('nama');
+      
+    dataSiswa = filterDemoData(dataSiswa, 'siswa');
     if (dataSiswa) setSiswa(dataSiswa);
       
     setIsLoading(false);

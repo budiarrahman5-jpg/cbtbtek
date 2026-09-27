@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { Trophy, Download, Search, Calculator } from 'lucide-react';
 
 export default function HasilUjianPage() {
@@ -20,10 +21,12 @@ export default function HasilUjianPage() {
   }, [selectedPaket, selectedKelas]);
 
   const fetchFilters = async () => {
-    const { data: p } = await supabase.from('paket').select('*');
+    let { data: p } = await supabase.from('paket').select('*');
+    p = filterDemoData(p, 'paket');
     if (p) setPaketList(p);
     
-    const { data: k } = await supabase.from('kelas').select('*');
+    let { data: k } = await supabase.from('kelas').select('*');
+    k = filterDemoData(k, 'kelas');
     if (k) setKelasList(k);
   };
 
@@ -36,7 +39,8 @@ export default function HasilUjianPage() {
     if (selectedPaket !== 'ALL') query = query.eq('paket_id', selectedPaket);
     if (selectedKelas !== 'ALL') query = query.eq('users.kelas_id', selectedKelas);
 
-    const { data } = await query;
+    let { data } = await query;
+    data = filterDemoData(data, 'hasil');
     if (data) setHasil(data);
     setIsLoading(false);
   };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, Activity, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -33,18 +34,22 @@ export default function AdminDashboard() {
     setIsRefreshing(true);
     try {
       // Ambil total user (peserta) dan status online
-      const { data: dataPeserta } = await supabase
+      let { data: dataPeserta } = await supabase
         .from('users')
-        .select('id, status_login')
+        .select('id, status_login, username') // Add username to select
         .eq('role', 'siswa');
+      
+      dataPeserta = filterDemoData(dataPeserta, 'users');
       
       const countPeserta = dataPeserta?.length || 0;
       const countOnline = dataPeserta?.filter(u => u.status_login === '1').length || 0;
 
       // Ambil hasil ujian
-      const { data: hasilData } = await supabase
+      let { data: hasilData } = await supabase
         .from('hasil')
-        .select('skor_akhir, cheat_count, users(kelas(nama_kelas))');
+        .select('skor_akhir, cheat_count, users(username, kelas(nama_kelas))'); // Add username to users relation
+
+      hasilData = filterDemoData(hasilData, 'hasil');
 
       let selesai = 0;
       let totalSkor = 0;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -27,13 +28,14 @@ export default function PantauSiswaPage() {
     setIsRefreshing(true);
     
     try {
-      const { data } = await supabase
+      let { data } = await supabase
         .from('users')
         .select('*, kelas(nama_kelas)')
         .eq('role', 'siswa')
         .order('status_login', { ascending: false }) // Yang online di atas
         .order('nama');
         
+      data = filterDemoData(data, 'users');
       if (data) setSiswa(data);
     } catch (error) {
       console.error('Error fetching data:', error);

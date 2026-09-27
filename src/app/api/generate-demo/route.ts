@@ -15,6 +15,18 @@ export async function POST() {
     const demoId = generateRandomString(5);
     const token = `DEMO${generateRandomString(4).toUpperCase()}`;
 
+    // 0. Garbage Collection: Hapus data demo lama ( > 7 hari)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const isoDate = sevenDaysAgo.toISOString();
+
+    // Jalankan penghapusan tanpa menunggu/mem-blok proses pembuatan demo baru jika tidak perlu
+    Promise.all([
+      supabase.from('users').delete().ilike('username', 'demo_%').lt('created_at', isoDate),
+      supabase.from('paket').delete().ilike('nama_paket', 'Paket Ujian Demo%').lt('created_at', isoDate),
+      supabase.from('kelas').delete().ilike('nama_kelas', 'Kelas Demo%').lt('created_at', isoDate)
+    ]).catch(err => console.error("Garbage collection failed:", err));
+
     // 1. Create Kelas Demo
     const { data: kelas, error: kelasError } = await supabase
       .from('kelas')

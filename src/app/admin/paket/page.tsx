@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { filterDemoData } from '@/lib/demo-filter';
 import { Package, Plus, Save, Trash2 } from 'lucide-react';
 
 export default function KelolaPaketPage() {
@@ -21,7 +22,8 @@ export default function KelolaPaketPage() {
 
   const fetchPaket = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('paket').select('*').order('created_at', { ascending: false });
+    let { data } = await supabase.from('paket').select('*').order('created_at', { ascending: false });
+    data = filterDemoData(data, 'paket');
     if (data) setPaket(data);
     setIsLoading(false);
   };
