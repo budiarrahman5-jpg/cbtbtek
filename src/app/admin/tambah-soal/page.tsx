@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill-new/dist/quill.snow.css';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
 
@@ -13,7 +13,7 @@ if (typeof window !== 'undefined') {
   (window as any).katex = katex;
 }
 
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 
 export default function TambahSoalPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
