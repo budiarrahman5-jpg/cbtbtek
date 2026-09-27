@@ -30,9 +30,13 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
       // Acak urutan respons agar ujian menantang
       setRespons([...rData].sort(() => Math.random() - 0.5));
     } catch(e) {
-      console.error("Gagal parse opsi menjodohkan:", e, soal.opsi_a);
-      setPremis([]);
-      setRespons([]);
+      console.error("Gagal parse opsi menjodohkan, mencoba mode teks fallback:", e);
+      // Fallback untuk format data lama yang bukan JSON (misalnya "Indonesia|Jepang")
+      let legacyP = String(soal.opsi_a || '').split('|').map((t, i) => ({ id: `legacy-p-${i}`, text: t.trim() })).filter(p => p.text);
+      let legacyR = String(soal.opsi_b || '').split('|').map((t, i) => ({ id: `legacy-r-${i}`, text: t.trim() })).filter(r => r.text);
+      
+      setPremis(legacyP);
+      setRespons(legacyR.sort(() => Math.random() - 0.5));
     }
     
     // Ensure connections is an array
