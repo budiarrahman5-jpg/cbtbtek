@@ -10,7 +10,7 @@ import katex from 'katex';
 
 // Menyematkan katex ke window agar Quill bisa mendeteksinya untuk fitur Formula
 if (typeof window !== 'undefined') {
-  window.katex = katex;
+  (window as any).katex = katex;
 }
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
