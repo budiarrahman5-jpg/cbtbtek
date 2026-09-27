@@ -14,7 +14,21 @@ if (typeof window !== 'undefined') {
   (window as any).katex = katex;
 }
 
-const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
+const ReactQuill = dynamic(async () => {
+  const mod = await import('react-quill-new');
+  const { default: RQ, Quill } = mod;
+  
+  if (typeof window !== 'undefined') {
+    (window as any).Quill = Quill;
+    try {
+      const ImageResize = (await import('quill-image-resize-module-react')).default;
+      Quill.register('modules/imageResize', ImageResize);
+    } catch(e) {
+      console.error("Failed to load ImageResize module", e);
+    }
+  }
+  return RQ;
+}, { ssr: false });
 
 export default function TambahSoalPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
@@ -98,6 +112,9 @@ export default function TambahSoalPage() {
       handlers: {
         image: imageHandler
       }
+    },
+    imageResize: {
+      modules: ['Resize', 'DisplaySize']
     }
   }), []);
 

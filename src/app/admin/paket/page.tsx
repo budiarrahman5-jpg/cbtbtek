@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Package, Plus, Save, Trash2 } from 'lucide-react';
+import { Package, Plus, Save, Trash2, Eye, X, CheckCircle2 } from 'lucide-react';
 
 export default function KelolaPaketPage() {
   const [paket, setPaket] = useState<any[]>([]);
@@ -16,6 +16,11 @@ export default function KelolaPaketPage() {
   const [deskripsi, setDeskripsi] = useState('');
   const [durasi, setDurasi] = useState(60);
   const [token, setToken] = useState('');
+
+  // Pratinjau states
+  const [previewPaket, setPreviewPaket] = useState<any>(null);
+  const [previewSoal, setPreviewSoal] = useState<any[]>([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchPaket();
@@ -82,6 +87,14 @@ export default function KelolaPaketPage() {
     if (!confirm('Yakin hapus paket ini? Semua soal di dalamnya akan terhapus!')) return;
     await supabase.from('paket').delete().eq('id', id);
     fetchPaket();
+  };
+
+  const openPratinjau = async (p: any) => {
+    setPreviewPaket(p);
+    setIsPreviewLoading(true);
+    const { data } = await supabase.from('soal').select('*').eq('paket_id', p.id);
+    setPreviewSoal(data || []);
+    setIsPreviewLoading(false);
   };
 
   return (
@@ -188,9 +201,14 @@ export default function KelolaPaketPage() {
                     </select>
                   </td>
                   <td className="p-4 text-center">
-                    <button onClick={() => hapusPaket(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded">
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={() => openPratinjau(p)} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 p-2 rounded transition-colors" title="Pratinjau Soal">
+                        <Eye size={18} />
+                      </button>
+                      <button onClick={() => hapusPaket(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="Hapus Paket">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -198,6 +216,150 @@ export default function KelolaPaketPage() {
           </tbody>
         </table>
       </div>
+
+      {/* MODAL PRATINJAU SOAL */}
+      {previewPaket && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-50 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+            {/* Header Modal */}
+            <div className="bg-white border-b border-slate-200 p-5 flex justify-between items-center sticky top-0 z-10">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                  <Eye className="text-indigo-600" /> Pratinjau Soal: {previewPaket.nama_paket}
+                </h2>
+                <p className="text-sm font-medium text-slate-500 mt-1">
+                  Total Soal: {previewSoal.length} | Token: <span className="uppercase font-bold text-indigo-600">{previewPaket.token}</span>
+                </p>
+              </div>
+              <button 
+                onClick={() => { setPreviewPaket(null); setPreviewSoal([]); }}
+                className="p-2 bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 rounded-full transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Konten Soal */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              {isPreviewLoading ? (
+                <div className="flex flex-col items-center justify-center h-40">
+                  <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-4 font-bold text-slate-500 animate-pulse">Memuat Soal...</p>
+                </div>
+              ) : previewSoal.length === 0 ? (
+                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-300">
+                  <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 font-medium">Belum ada soal untuk paket ini.</p>
+                </div>
+              ) : (
+                previewSoal.map((soal, index) => (
+                  <div key={soal.id} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div className="absolute -top-3 -left-3 w-8 h-8 bg-indigo-600 text-white font-black rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                      {index + 1}
+                    </div>
+                    
+                    <div className="flex justify-between items-start mb-4 ml-6">
+                      <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded font-bold border border-slate-200">
+                        {soal.tipe}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        Bobot: <span className="text-indigo-600">{soal.skor_maks || 10}</span>
+                      </span>
+                    </div>
+
+                    <div 
+                      className="prose prose-slate max-w-none mb-6 font-medium text-slate-800"
+                      dangerouslySetInnerHTML={{ __html: soal.pertanyaan }}
+                    />
+
+                    {/* Render Opsi untuk PG & PG Kompleks */}
+                    {(soal.tipe === 'PG' || soal.tipe === 'PG Kompleks') && (
+                      <div className="space-y-3 mt-4 ml-2">
+                        {['a', 'b', 'c', 'd', 'e'].map(opt => {
+                          const key = `opsi_${opt}`;
+                          const text = soal[key];
+                          if (!text || text === '<p><br></p>') return null;
+                          
+                          // Cek apakah opsi ini adalah kunci jawaban
+                          let isKey = false;
+                          if (soal.tipe === 'PG Kompleks') {
+                            const keys = (soal.kunci || '').split(',').map((k: string) => k.trim().toUpperCase());
+                            isKey = keys.includes(opt.toUpperCase());
+                          } else {
+                            isKey = (soal.kunci || '').toUpperCase() === opt.toUpperCase();
+                          }
+
+                          return (
+                            <div key={opt} className={`flex items-start gap-3 p-3 rounded-lg border-2 transition-colors ${isKey ? 'bg-emerald-50 border-emerald-500' : 'bg-slate-50 border-slate-100'}`}>
+                              <div className={`mt-0.5 w-6 h-6 rounded flex items-center justify-center font-bold text-xs shrink-0 ${isKey ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                {opt.toUpperCase()}
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                <div dangerouslySetInnerHTML={{ __html: text }} className={`prose prose-sm max-w-none ${isKey ? 'text-emerald-900 font-medium' : 'text-slate-700'}`} />
+                              </div>
+                              {isKey && <CheckCircle2 className="text-emerald-500 shrink-0" size={20} />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Tampilkan Kunci untuk Essay & Isian Singkat */}
+                    {(soal.tipe === 'Essay' || soal.tipe === 'Isian') && (
+                      <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs font-bold text-amber-700 uppercase mb-1">Kunci Jawaban:</p>
+                        <p className="font-medium text-amber-900">{soal.kunci || '-'}</p>
+                      </div>
+                    )}
+
+                    {/* Tampilkan Kunci untuk Menjodohkan */}
+                    {soal.tipe === 'Menjodohkan' && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs font-bold text-blue-700 uppercase mb-2">Pasangan Benar:</p>
+                        <div className="space-y-2">
+                          {(() => {
+                            try {
+                              // Coba mode JSON
+                              let pData = Array.isArray(JSON.parse(soal.opsi_a || '[]')) ? JSON.parse(soal.opsi_a) : [];
+                              let rData = Array.isArray(JSON.parse(soal.opsi_b || '[]')) ? JSON.parse(soal.opsi_b) : [];
+                              let kData = Array.isArray(JSON.parse(soal.kunci || '[]')) ? JSON.parse(soal.kunci) : [];
+                              
+                              if (pData.length === 0) throw new Error("Fallback legacy");
+
+                              return kData.map((k: any, idx: number) => {
+                                const p = pData.find((x:any) => x.id === k.premisId);
+                                const r = rData.find((x:any) => x.id === k.responsId);
+                                return (
+                                  <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2 rounded shadow-sm border border-blue-100 text-sm">
+                                    <div className="flex-1 p-2 bg-slate-50 rounded" dangerouslySetInnerHTML={{__html: p?.text || '?'}} />
+                                    <span className="hidden md:inline font-bold text-blue-400">{'->'}</span>
+                                    <div className="flex-1 p-2 bg-slate-50 rounded" dangerouslySetInnerHTML={{__html: r?.text || '?'}} />
+                                  </div>
+                                );
+                              });
+                            } catch (e) {
+                              // Legacy string mode
+                              let pData = String(soal.opsi_a || '').split('|');
+                              let rData = String(soal.opsi_b || '').split('|');
+                              return pData.map((p, idx) => (
+                                <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2 rounded shadow-sm border border-blue-100 text-sm">
+                                  <div className="flex-1 p-2 bg-slate-50 rounded">{p.trim()}</div>
+                                  <span className="hidden md:inline font-bold text-blue-400">{'->'}</span>
+                                  <div className="flex-1 p-2 bg-slate-50 rounded">{rData[idx]?.trim() || '?'}</div>
+                                </div>
+                              ));
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
