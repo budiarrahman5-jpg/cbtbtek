@@ -150,6 +150,19 @@ export default function TokenPage() {
            </div>
         </div>
 
+        {user?.username?.startsWith('demo_siswa_') && selectedPaket && (
+           <div className="mb-6 bg-teal-50 border border-teal-200 text-teal-800 p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in duration-300">
+             <Info className="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" />
+             <div>
+               <p className="font-bold text-sm">Info Akun Demo</p>
+               <p className="text-xs mt-1">
+                 Gunakan token ujian berikut untuk paket yang Anda pilih: <strong className="bg-teal-200 px-2 py-0.5 rounded text-teal-900 ml-1 tracking-wider">{paketList.find(p => p.id === selectedPaket)?.token}</strong>
+               </p>
+             </div>
+           </div>
+        )}
+
+
         <div className="space-y-6">
           <div>
             <label className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">

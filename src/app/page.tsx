@@ -37,6 +37,18 @@ export default function Home() {
         return;
       }
 
+      if (data.username.startsWith('demo_')) {
+        const createdAt = new Date(data.created_at);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 7) {
+          setErrorMsg('Akun demo ini telah kedaluwarsa. Silakan buat akun demo baru.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       if (data.status_login === '1') {
         setErrorMsg('Akun sedang aktif di perangkat lain! Hubungi pengawas.');
         setIsLoading(false);
