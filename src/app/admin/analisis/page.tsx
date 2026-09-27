@@ -2,20 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PieChart, Search, Download } from 'lucide-react';
+import { PieChart, Search, Download, FileSpreadsheet, Check, X, Minus } from 'lucide-react';
+import clsx from 'clsx';
 
 export default function AnalisisSoalPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
   const [selectedPaket, setSelectedPaket] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [analisis, setAnalisis] = useState<any[]>([]);
+  const [soalList, setSoalList] = useState<any[]>([]);
 
   useEffect(() => {
     fetchPaket();
   }, []);
 
   const fetchPaket = async () => {
-    const { data } = await supabase.from('paket').select('*');
+    const { data } = await supabase.from('paket').select('*').order('nama_paket');
     if (data) setPaketList(data);
   };
 
@@ -26,80 +28,156 @@ export default function AnalisisSoalPage() {
     }
     
     setIsLoading(true);
-    // Ambil semua hasil dari paket ini
+    
+    // 1. Ambil daftar soal untuk header tabel
+    const { data: dataSoal } = await supabase
+      .from('soal')
+      .select('id, kunci, tipe')
+      .eq('paket_id', selectedPaket)
+      .order('id', { ascending: true }); // Pastikan urutannya konsisten
+      
+    if (dataSoal) setSoalList(dataSoal);
+
+    // 2. Ambil semua hasil dari paket ini
     const { data: hasilData } = await supabase
       .from('hasil')
       .select('detail_jawaban, skor_akhir, users(nama)')
-      .eq('paket_id', selectedPaket);
+      .eq('paket_id', selectedPaket)
+      .order('skor_akhir', { ascending: false });
 
     if (hasilData) {
       setAnalisis(hasilData);
     }
+    
     setIsLoading(false);
+  };
+
+  // Fungsi untuk render sel matriks
+  const renderSelMatriks = (soal: any, jawabanSiswa: string) => {
+    if (!jawabanSiswa || jawabanSiswa.trim() === '') {
+      return (
+        <td key={soal.id} className="p-2 border border-slate-200 text-center bg-slate-50">
+          <Minus size={16} className="text-slate-300 mx-auto" />
+        </td>
+      );
+    }
+
+    if (soal.tipe === 'PG' || soal.tipe === 'PG Kompleks') {
+      const isCorrect = jawabanSiswa.toUpperCase() === soal.kunci?.toUpperCase();
+      return (
+        <td 
+          key={soal.id} 
+          className={clsx(
+            "p-2 border border-slate-200 text-center font-bold text-sm",
+            isCorrect ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
+          )}
+        >
+          {jawabanSiswa.toUpperCase()}
+        </td>
+      );
+    }
+
+    // Untuk Essay / Isian
+    const isCorrect = soal.kunci && jawabanSiswa.toLowerCase().includes(soal.kunci.toLowerCase());
+    return (
+      <td 
+        key={soal.id} 
+        className="p-2 border border-slate-200 text-center relative group"
+      >
+        <div className="w-16 mx-auto truncate text-xs text-slate-600 font-medium">
+          {jawabanSiswa}
+        </div>
+        {/* Tooltip untuk essay yang panjang */}
+        <div className="absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1 w-48 bg-slate-800 text-white text-xs p-2 rounded shadow-lg hidden group-hover:block whitespace-normal">
+          {jawabanSiswa}
+        </div>
+      </td>
+    );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 gap-4">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <PieChart className="text-purple-600" /> Analisis Butir Soal (Matriks)
-        </h2>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><FileSpreadsheet size={20} /></div> 
+            Analisis Butir Soal
+          </h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">Matriks jawaban siswa untuk evaluasi soal.</p>
+        </div>
         
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
           <select 
             value={selectedPaket} onChange={e=>setSelectedPaket(e.target.value)}
-            className="flex-1 md:flex-none border p-2 rounded bg-gray-50 font-bold outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:w-auto border-2 border-slate-200 p-2.5 rounded-xl bg-white font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all cursor-pointer"
           >
-            <option value="">- Pilih Paket Ujian -</option>
+            <option value="">-- Pilih Paket Ujian --</option>
             {paketList.map(p => <option key={p.id} value={p.id}>{p.nama_paket}</option>)}
           </select>
           <button 
             onClick={prosesAnalisis}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-bold flex items-center gap-2 transition"
+            disabled={isLoading}
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Search size={18} /> Proses
-          </button>
-          <button 
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold flex items-center gap-2 transition"
-            onClick={() => alert('Fitur Export Excel akan diimplementasikan kemudian via library XLSX.')}
-          >
-            <Download size={18} /> Excel
+            <Search size={18} /> {isLoading ? 'Memuat...' : 'Proses Matriks'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto min-h-[400px]">
+      <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden min-h-[400px] flex flex-col">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full p-20 font-bold text-gray-500">
-            Sedang memproses matriks jawaban...
+          <div className="flex flex-col items-center justify-center flex-1 p-20 gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-bold text-slate-500 animate-pulse">Menyusun Matriks Jawaban...</p>
           </div>
         ) : analisis.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-20 text-center text-gray-500">
-            <PieChart size={64} className="text-gray-300 mb-4" />
-            <span className="font-bold text-xl">Pilih Paket Ujian</span>
-            <p className="mt-2 text-sm max-w-md">Klik "Proses" untuk memuat data analisis skor matriks dari seluruh siswa yang telah menyelesaikan paket ujian tersebut.</p>
+          <div className="flex flex-col items-center justify-center flex-1 p-20 text-center">
+            <div className="bg-slate-50 p-6 rounded-full mb-4">
+              <PieChart size={48} className="text-slate-300" />
+            </div>
+            <h3 className="font-extrabold text-xl text-slate-700">Pilih Paket Ujian</h3>
+            <p className="mt-2 text-sm text-slate-500 max-w-sm leading-relaxed">
+              Silakan pilih paket ujian di atas lalu klik <b>Proses Matriks</b> untuk melihat detail jawaban per butir soal dari seluruh siswa.
+            </p>
           </div>
         ) : (
-          <table className="w-full text-left border-collapse text-sm">
-            <thead className="bg-gray-100 text-gray-700 border-b">
-              <tr>
-                <th className="p-3 border-r">Nama Siswa</th>
-                <th className="p-3 border-r text-center">Skor Akhir</th>
-                <th className="p-3 font-semibold text-center text-gray-500">Data Raw (Matriks Detail Jawaban JSON)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analisis.map((h, i) => (
-                <tr key={i} className="border-b hover:bg-gray-50">
-                  <td className="p-3 border-r font-bold">{h.users?.nama}</td>
-                  <td className="p-3 border-r text-center font-black text-blue-700">{h.skor_akhir}</td>
-                  <td className="p-3 font-mono text-xs text-gray-500 truncate max-w-xl">
-                    {JSON.stringify(h.detail_jawaban)}
-                  </td>
+          <div className="overflow-x-auto custom-scrollbar flex-1">
+            <div className="p-4 bg-slate-50 border-b border-slate-100 flex gap-4 text-xs font-bold text-slate-500">
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded"></div> Benar</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-rose-100 border border-rose-200 rounded"></div> Salah</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-slate-100 border border-slate-200 rounded flex items-center justify-center"><Minus size={10} className="text-slate-400"/></div> Kosong</div>
+            </div>
+            <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
+              <thead className="bg-slate-100 text-slate-600 sticky top-0 z-10 font-bold uppercase text-xs tracking-wider">
+                <tr>
+                  <th className="p-3 border border-slate-200 min-w-[200px] bg-slate-100 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Nama Siswa</th>
+                  <th className="p-3 border border-slate-200 text-center min-w-[80px]">Skor</th>
+                  {soalList.map((soal, i) => (
+                    <th key={soal.id} className="p-3 border border-slate-200 text-center w-12" title={`Soal ${i + 1}`}>
+                      {i + 1}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {analisis.map((h, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    {/* @ts-ignore */}
+                    <td className="p-3 border border-slate-200 font-bold text-slate-700 bg-white sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      {h.users?.nama}
+                    </td>
+                    <td className="p-3 border border-slate-200 text-center font-black text-indigo-600 bg-indigo-50/30">
+                      {h.skor_akhir}
+                    </td>
+                    {soalList.map((soal) => {
+                      const jawabanSiswa = h.detail_jawaban?.[soal.id];
+                      return renderSelMatriks(soal, jawabanSiswa);
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

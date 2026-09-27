@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, Activity, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell
@@ -14,6 +14,9 @@ export default function AdminDashboard() {
     selesai: 0,
     rataRata: 0,
     cheat: 0,
+    tertinggi: 0,
+    terendah: 0,
+    online: 0,
   });
   
   const [chartData, setChartData] = useState<any[]>([]);
@@ -29,11 +32,14 @@ export default function AdminDashboard() {
     setIsLoading(true);
     setIsRefreshing(true);
     try {
-      // Ambil total user (peserta)
-      const { count: countPeserta } = await supabase
+      // Ambil total user (peserta) dan status online
+      const { data: dataPeserta } = await supabase
         .from('users')
-        .select('*', { count: 'exact', head: true })
+        .select('id, status_login')
         .eq('role', 'siswa');
+      
+      const countPeserta = dataPeserta?.length || 0;
+      const countOnline = dataPeserta?.filter(u => u.status_login === '1').length || 0;
 
       // Ambil hasil ujian
       const { data: hasilData } = await supabase
@@ -43,18 +49,25 @@ export default function AdminDashboard() {
       let selesai = 0;
       let totalSkor = 0;
       let totalCheat = 0;
+      let tertinggi = 0;
+      let terendah = 0;
       
       const kelasStatMap: Record<string, { total: number, count: number }> = {};
       const rentangMap = {
         '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0
       };
 
-      if (hasilData) {
+      if (hasilData && hasilData.length > 0) {
         selesai = hasilData.length;
+        terendah = 100;
+
         hasilData.forEach(h => {
           const skor = h.skor_akhir || 0;
           totalSkor += skor;
           totalCheat += h.cheat_count || 0;
+          
+          if (skor > tertinggi) tertinggi = skor;
+          if (skor < terendah) terendah = skor;
           
           // Data untuk Rata-rata per kelas
           // @ts-ignore
@@ -77,10 +90,13 @@ export default function AdminDashboard() {
       const rataRata = selesai > 0 ? Math.round(totalSkor / selesai) : 0;
 
       setStats({
-        peserta: countPeserta || 0,
+        peserta: countPeserta,
         selesai,
         rataRata,
         cheat: totalCheat,
+        tertinggi,
+        terendah,
+        online: countOnline,
       });
       
       // Format data untuk Bar Chart
@@ -127,9 +143,8 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Info Cards */}
+      {/* Info Cards Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Peserta */}
         <div className="bg-white p-6 rounded-2xl shadow-xl shadow-blue-500/10 border-b-4 border-blue-500 hover:-translate-y-1 transition-transform duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -142,7 +157,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Selesai Ujian */}
         <div className="bg-white p-6 rounded-2xl shadow-xl shadow-emerald-500/10 border-b-4 border-emerald-500 hover:-translate-y-1 transition-transform duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -155,7 +169,33 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Rata-Rata Nilai */}
+        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-fuchsia-500/10 border-b-4 border-fuchsia-500 hover:-translate-y-1 transition-transform duration-300">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-fuchsia-500/80 text-xs font-black uppercase tracking-widest">Sedang Ujian</p>
+              <h3 className="text-4xl font-black mt-2 text-slate-800">{isLoading ? '...' : stats.online}</h3>
+            </div>
+            <div className="p-3.5 bg-gradient-to-br from-fuchsia-500 to-purple-600 rounded-xl shadow-lg shadow-fuchsia-500/30 text-white">
+              <Activity className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-red-500/10 border-b-4 border-red-500 hover:-translate-y-1 transition-transform duration-300">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-red-500/80 text-xs font-black uppercase tracking-widest">Indikasi Curang</p>
+              <h3 className="text-4xl font-black mt-2 text-slate-800">{isLoading ? '...' : stats.cheat}</h3>
+            </div>
+            <div className="p-3.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30 text-white">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Info Cards Row 2 (Nilai) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-xl shadow-amber-500/10 border-b-4 border-amber-500 hover:-translate-y-1 transition-transform duration-300">
           <div className="flex justify-between items-start">
             <div>
@@ -168,15 +208,26 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Pelanggaran / Cheat */}
-        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-red-500/10 border-b-4 border-red-500 hover:-translate-y-1 transition-transform duration-300">
+        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-indigo-500/10 border-b-4 border-indigo-500 hover:-translate-y-1 transition-transform duration-300">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-red-500/80 text-xs font-black uppercase tracking-widest">Indikasi Curang</p>
-              <h3 className="text-4xl font-black mt-2 text-slate-800">{isLoading ? '...' : stats.cheat}</h3>
+              <p className="text-indigo-500/80 text-xs font-black uppercase tracking-widest">Nilai Tertinggi</p>
+              <h3 className="text-4xl font-black mt-2 text-slate-800">{isLoading ? '...' : stats.tertinggi}</h3>
             </div>
-            <div className="p-3.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30 text-white">
-              <AlertTriangle className="w-6 h-6" />
+            <div className="p-3.5 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/30 text-white">
+              <ArrowUpCircle className="w-6 h-6" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-500/10 border-b-4 border-slate-400 hover:-translate-y-1 transition-transform duration-300">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-slate-500/80 text-xs font-black uppercase tracking-widest">Nilai Terendah</p>
+              <h3 className="text-4xl font-black mt-2 text-slate-800">{isLoading ? '...' : stats.terendah}</h3>
+            </div>
+            <div className="p-3.5 bg-gradient-to-br from-slate-400 to-slate-500 rounded-xl shadow-lg shadow-slate-500/30 text-white">
+              <ArrowDownCircle className="w-6 h-6" />
             </div>
           </div>
         </div>

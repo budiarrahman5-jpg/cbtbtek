@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, Users, Package, Archive, 
   FileText, PlusCircle, Trophy, PieChart, 
-  Settings, Server, Menu, X, LogOut, ChevronRight
+  Settings, Server, Menu, X, LogOut, ChevronRight, MonitorPlay
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -21,6 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Bank Soal', path: '/admin/bank-soal', icon: Archive },
     { name: 'Kelola Soal', path: '/admin/soal', icon: FileText },
     { name: 'Tambah Soal', path: '/admin/tambah-soal', icon: PlusCircle },
+    { name: 'Pantau Ujian', path: '/admin/pantau', icon: MonitorPlay },
     { name: 'Hasil Ujian', path: '/admin/hasil', icon: Trophy },
     { name: 'Analisis Soal', path: '/admin/analisis', icon: PieChart },
     { name: 'Pengaturan', path: '/admin/pengaturan', icon: Settings },
