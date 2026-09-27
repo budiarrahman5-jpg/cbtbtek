@@ -38,10 +38,12 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
       setPremis(legacyP);
       setRespons(legacyR.sort(() => Math.random() - 0.5));
     }
-    
-    // Ensure connections is an array
+  }, [soal]);
+
+  // Sync initial connections when switching questions
+  useEffect(() => {
     setConnections(Array.isArray(jawabanData) ? jawabanData : []);
-  }, [soal, jawabanData]);
+  }, [soal]);
 
   useEffect(() => {
     onChange(connections);
