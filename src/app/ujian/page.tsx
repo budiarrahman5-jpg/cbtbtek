@@ -22,9 +22,9 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
       let pData = typeof soal.opsi_a === 'string' ? JSON.parse(soal.opsi_a || '[]') : (soal.opsi_a || []);
       let rData = typeof soal.opsi_b === 'string' ? JSON.parse(soal.opsi_b || '[]') : (soal.opsi_b || []);
       
-      // Enforce array type to prevent crash on .map or spread
-      pData = Array.isArray(pData) ? pData : [];
-      rData = Array.isArray(rData) ? rData : [];
+      // Enforce array type to prevent crash on .map or spread, and filter invalid items
+      pData = (Array.isArray(pData) ? pData : []).filter((p: any) => p && typeof p.id !== 'undefined' && typeof p.text !== 'undefined');
+      rData = (Array.isArray(rData) ? rData : []).filter((r: any) => r && typeof r.id !== 'undefined' && typeof r.text !== 'undefined');
 
       setPremis(pData);
       // Acak urutan respons agar ujian menantang
@@ -393,9 +393,10 @@ export default function UjianPage() {
           
           <button 
             onClick={() => setIsNavOpen(!isNavOpen)} 
-            className="text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 p-2 rounded-lg border border-slate-200 transition-all active:scale-95"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-full font-bold shadow-md shadow-indigo-600/20 transition-all active:scale-95 border border-indigo-500"
           >
-            <Grid size={22} />
+            <Grid size={18} className={isNavOpen ? "opacity-50" : ""} />
+            <span className="hidden sm:inline tracking-wider">{isNavOpen ? 'Tutup Daftar' : 'Daftar Soal'}</span>
           </button>
         </div>
       </header>
@@ -544,17 +545,17 @@ export default function UjianPage() {
 
         {/* Sidebar Nav */}
         {isNavOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity" onClick={() => setIsNavOpen(false)} />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsNavOpen(false)} />
         )}
         <div className={clsx(
-          "fixed md:relative right-0 top-0 h-full w-[280px] md:w-[320px] bg-white border-l border-slate-200 p-5 flex flex-col shadow-2xl md:shadow-none z-50 transition-transform duration-300 ease-out transform",
-          isNavOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"
+          "fixed right-0 top-0 h-full w-[280px] md:w-[320px] bg-white border-l border-slate-200 p-5 flex flex-col shadow-2xl z-50 transition-transform duration-300 ease-out transform",
+          isNavOpen ? "translate-x-0" : "translate-x-full"
         )}>
           <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-5">
             <h3 className="font-extrabold text-slate-800 tracking-wide flex items-center gap-2">
               <Grid size={18} className="text-indigo-500" /> NAVIGASI SOAL
             </h3>
-            <button onClick={() => setIsNavOpen(false)} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-1.5 rounded-lg transition-colors md:hidden">
+            <button onClick={() => setIsNavOpen(false)} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-1.5 rounded-lg transition-colors">
               <ChevronRight size={20} />
             </button>
           </div>
