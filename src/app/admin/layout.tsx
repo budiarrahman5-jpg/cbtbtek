@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { 
   LayoutDashboard, Users, Package, Archive, 
   FileText, PlusCircle, Trophy, PieChart, 
@@ -12,7 +13,35 @@ import clsx from 'clsx';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('cbt_user');
+    if (!savedUser) {
+      router.push('/');
+      return;
+    }
+    
+    const parsedUser = JSON.parse(savedUser);
+    if (parsedUser.role !== 'admin') {
+      router.push('/token');
+      return;
+    }
+    
+    setUser(parsedUser);
+  }, [router]);
+
+  const handleLogout = async () => {
+    if (user) {
+      await supabase.from('users').update({ status_login: '0' }).eq('id', user.id);
+      localStorage.removeItem('cbt_user');
+      router.push('/');
+    }
+  };
+
+  const isDemoMode = user?.username?.startsWith('demo_admin_');
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -90,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <button className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group">
+          <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group">
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> 
             <span>Logout Admin</span>
           </button>
@@ -116,14 +145,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           
           <div className="flex items-center gap-3">
+            {isDemoMode && (
+              <span className="hidden md:inline-flex bg-red-500/10 text-red-600 border border-red-500/20 px-3 py-1 rounded-full text-xs font-bold tracking-widest animate-pulse">
+                DEMO MODE
+              </span>
+            )}
             <div className="hidden sm:flex flex-col items-end mr-2">
-              <span className="text-sm font-bold text-slate-800">Administrator</span>
+              <span className="text-sm font-bold text-slate-800">{user?.nama || 'Administrator'}</span>
               <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold border-2 border-indigo-200">
-              AD
+              {user?.nama ? user.nama.substring(0, 2).toUpperCase() : 'AD'}
             </div>
           </div>
         </header>

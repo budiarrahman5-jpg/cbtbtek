@@ -59,7 +59,12 @@ export default function Home() {
       await supabase.from('log').insert({ user_id: data.id, aktivitas: 'Login Aplikasi' });
 
       localStorage.setItem('cbt_user', JSON.stringify(data));
-      router.push('/token');
+      
+      if (data.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/token');
+      }
 
     } catch (err) {
       console.error(err);
