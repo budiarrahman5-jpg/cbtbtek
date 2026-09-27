@@ -172,21 +172,21 @@ export default function KelolaSiswaPage() {
              Manajemen Kelas
           </h3>
           
-          <div className="flex flex-col gap-3 mb-6">
+          <div className="flex flex-col gap-2 mb-6">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tambah Kelas Baru</label>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col gap-3">
               <input 
                 type="text" 
                 value={namaKelas}
                 onChange={(e) => setNamaKelas(e.target.value)}
-                className="flex-1 border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none uppercase font-bold text-slate-700 transition-all placeholder:font-medium placeholder:normal-case placeholder:text-slate-400" 
+                className="w-full border-2 border-slate-200 p-2.5 rounded-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none uppercase font-bold text-slate-700 transition-all placeholder:font-medium placeholder:normal-case placeholder:text-slate-400" 
                 placeholder="Misal: XII IPA 1" 
               />
               <button 
                 onClick={simpanKelas} 
-                className="bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 flex justify-center items-center gap-2 whitespace-nowrap"
+                className="w-full bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 flex justify-center items-center gap-2"
               >
-                <Plus size={20} /> SIMPAN KELAS
+                <Plus size={18} /> SIMPAN KELAS
               </button>
             </div>
           </div>
