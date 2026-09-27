@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen } from 'lucide-react';
+import clsx from 'clsx';
 
 export default function KelolaSiswaPage() {
   const [siswa, setSiswa] = useState<any[]>([]);
@@ -165,175 +166,199 @@ export default function KelolaSiswaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Kolom Kelola Kelas */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-col">
-          <h3 className="font-bold text-lg mb-4 text-gray-800 flex items-center gap-2 border-b pb-2">
-             <BookOpen size={20} className="text-blue-600"/> Kelola Kelas
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 p-6 flex flex-col">
+          <h3 className="font-extrabold text-lg mb-6 text-slate-800 flex items-center gap-3 border-b border-slate-100 pb-4">
+             <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><BookOpen size={20}/></div> 
+             Manajemen Kelas
           </h3>
-          <div className="flex flex-col sm:flex-row gap-2 mb-4">
-            <input 
-              type="text" 
-              value={namaKelas}
-              onChange={(e) => setNamaKelas(e.target.value)}
-              className="flex-1 border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none uppercase" 
-              placeholder="Ketik Nama Kelas Baru..." 
-            />
-            <button onClick={simpanKelas} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-bold transition flex justify-center items-center gap-2">
-              <Plus size={18} /> Simpan
-            </button>
+          
+          <div className="flex flex-col gap-3 mb-6">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tambah Kelas Baru</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input 
+                type="text" 
+                value={namaKelas}
+                onChange={(e) => setNamaKelas(e.target.value)}
+                className="flex-1 border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none uppercase font-bold text-slate-700 transition-all placeholder:font-medium placeholder:normal-case placeholder:text-slate-400" 
+                placeholder="Misal: XII IPA 1" 
+              />
+              <button 
+                onClick={simpanKelas} 
+                className="bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 flex justify-center items-center gap-2 whitespace-nowrap"
+              >
+                <Plus size={20} /> SIMPAN KELAS
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto max-h-64 border rounded">
+          
+          <div className="flex-1 overflow-y-auto max-h-64 rounded-xl border border-slate-200 custom-scrollbar">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 sticky top-0">
-                <tr><th className="p-2 border-b">Nama Kelas</th><th className="p-2 border-b w-12 text-center">Aksi</th></tr>
+              <thead className="bg-slate-50 sticky top-0 shadow-sm">
+                <tr>
+                  <th className="p-4 font-bold text-slate-600 border-b border-slate-200">Nama Kelas</th>
+                  <th className="p-4 font-bold text-slate-600 border-b border-slate-200 w-16 text-center">Aksi</th>
+                </tr>
               </thead>
               <tbody>
                 {kelas.map(k => (
-                  <tr key={k.id} className="border-b hover:bg-gray-50">
-                    <td className="p-2 font-bold text-gray-700">{k.nama_kelas}</td>
-                    <td className="p-2 text-center">
-                       <button onClick={() => hapusKelas(k.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16}/></button>
+                  <tr key={k.id} className="border-b border-slate-100 hover:bg-indigo-50/50 transition-colors">
+                    <td className="p-4 font-black text-slate-700">{k.nama_kelas}</td>
+                    <td className="p-4 text-center">
+                       <button onClick={() => hapusKelas(k.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all" title="Hapus Kelas">
+                         <Trash2 size={18}/>
+                       </button>
                     </td>
                   </tr>
                 ))}
-                {kelas.length === 0 && <tr><td colSpan={2} className="p-4 text-center text-gray-400">Belum ada kelas</td></tr>}
+                {kelas.length === 0 && <tr><td colSpan={2} className="p-6 text-center text-slate-400 font-medium">Belum ada data kelas</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* Kolom Tambah Siswa */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 lg:col-span-2">
-          <div className="flex justify-between items-center border-b pb-2 mb-4">
-            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-              <UserPlus size={20} className="text-green-600"/> Tambah Siswa
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 p-6 lg:col-span-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 mb-6 gap-4">
+            <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-3">
+              <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600"><UserPlus size={20}/></div> 
+              Registrasi Siswa
             </h3>
             <select 
-              className="border p-1.5 rounded text-sm font-bold bg-gray-50 focus:ring-2 focus:ring-blue-500"
+              className="border-2 border-slate-200 p-2.5 rounded-xl text-sm font-bold bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none cursor-pointer transition-all w-full sm:w-auto"
               value={inputMode}
               onChange={(e) => setInputMode(e.target.value)}
             >
-              <option value="single">Input Satu Per Satu</option>
-              <option value="bulk">Input Massal (CSV)</option>
+              <option value="single">Input Manual (Satu per Satu)</option>
+              <option value="bulk">Input Massal Cepat (CSV)</option>
             </select>
           </div>
 
           {inputMode === 'single' ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Username</label>
-                  <input type="text" value={sUsername} onChange={e=>setSUsername(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Username" />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Username</label>
+                  <input type="text" value={sUsername} onChange={e=>setSUsername(e.target.value)} className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:font-medium placeholder:text-slate-300" placeholder="Ketik Username..." />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Password</label>
-                  <input type="text" value={sPassword} onChange={e=>setSPassword(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Password" />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Password</label>
+                  <input type="text" value={sPassword} onChange={e=>setSPassword(e.target.value)} className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:font-medium placeholder:text-slate-300" placeholder="Ketik Password..." />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Nama Lengkap</label>
-                <input type="text" value={sNama} onChange={e=>setSNama(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nama Lengkap" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nama Lengkap</label>
+                  <input type="text" value={sNama} onChange={e=>setSNama(e.target.value)} className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 transition-all placeholder:font-medium placeholder:text-slate-300" placeholder="Ketik Nama Lengkap..." />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Pilih Kelas</label>
+                  <select value={sKelasId} onChange={e=>setSKelasId(e.target.value)} className="w-full border-2 border-slate-200 p-3.5 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-bold text-slate-700 cursor-pointer transition-all">
+                    <option value="">-- Pilih Kelas --</option>
+                    {kelas.map(k => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Kelas</label>
-                <select value={sKelasId} onChange={e=>setSKelasId(e.target.value)} className="w-full border p-2 rounded bg-yellow-50 focus:ring-2 focus:ring-blue-500 font-bold outline-none">
-                  <option value="">- Pilih Kelas -</option>
-                  {kelas.map(k => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
-                </select>
-              </div>
-              <button onClick={simpanSiswaSingle} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded shadow transition-colors">
-                Simpan Siswa
+              <button onClick={simpanSiswaSingle} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all active:scale-[0.98] uppercase tracking-wider mt-2">
+                Simpan Data Siswa
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-blue-800 bg-blue-50 p-3 rounded border border-blue-200 leading-relaxed">
-                <b>Format per baris (Pisahkan dengan koma):</b> username,password,Nama Lengkap,Nama Kelas<br/>
-                <b>Contoh:</b> <i>siswa01,1234,Andi Purnomo,XII IPA 1</i> <br/>
-                <i>Jika "Nama Kelas" belum ada, sistem akan otomatis membuatkannya.</i>
-              </p>
+            <div className="space-y-4">
+              <div className="text-sm text-slate-600 bg-amber-50 p-4 rounded-xl border border-amber-200/60 leading-relaxed shadow-sm">
+                <span className="font-bold text-amber-800 uppercase text-xs mb-1 block">Petunjuk Format Massal:</span>
+                Gunakan format koma per baris: <code className="font-bold bg-white px-1.5 py-0.5 rounded text-indigo-600 border border-amber-100">username,password,Nama Lengkap,Nama Kelas</code><br/>
+                Contoh: <br/>
+                <code className="block mt-2 font-mono bg-white p-2 rounded text-slate-700 border border-amber-100">
+                  siswa01,1234,Andi Purnomo,XII IPA 1<br/>
+                  siswa02,1234,Siti Aminah,XII IPS 2
+                </code>
+              </div>
               <textarea 
-                rows={5} 
-                className="w-full border p-3 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed" 
-                placeholder="siswa01,12345,Budi,XII IPA 1&#10;siswa02,12345,Siti,XII IPA 1"
+                rows={6} 
+                className="w-full border-2 border-slate-200 p-4 rounded-xl font-mono text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none leading-relaxed transition-all shadow-inner bg-slate-50" 
+                placeholder="Tempel data CSV di sini..."
                 value={bulkData}
                 onChange={e=>setBulkData(e.target.value)}
               />
-              <button onClick={simpanSiswaBulk} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded shadow transition-colors">
+              <button onClick={simpanSiswaBulk} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-black py-4 rounded-xl shadow-lg shadow-slate-800/20 transition-all active:scale-[0.98] uppercase tracking-wider">
                 Proses Input Massal
               </button>
             </div>
           )}
         </div>
       </div>
-
-      {/* BAGIAN BAWAH: TABEL DAFTAR SISWA */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 md:p-5 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <Users size={20} className="text-indigo-600"/> Daftar Seluruh Siswa
+      
+      {/* ... TABEL SISWA TETAP SEPERTI SEBELUMNYA ATAU BISA DI-UPGRADE ... */}
+      {/* Memperbarui desain tabel bawah */}
+      <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+        <div className="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+          <h2 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+            <Users size={20} className="text-indigo-600"/> Direktori Siswa
           </h2>
-          <div className="relative flex-1 sm:w-72 sm:flex-none">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Cari nama atau username..." 
+              placeholder="Cari berdasarkan nama atau username..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              className="pl-11 pr-4 py-3 w-full border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-medium text-sm transition-all"
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[500px]">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead className="bg-gray-50 text-gray-700 sticky top-0 z-10 shadow-sm">
+        <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
+          <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
+            <thead className="bg-white text-slate-500 sticky top-0 z-10 shadow-sm uppercase text-xs tracking-wider font-bold">
               <tr>
-                <th className="p-3 border-b font-bold w-12 text-center">No</th>
-                <th className="p-3 border-b font-bold">Username</th>
-                <th className="p-3 border-b font-bold">Password</th>
-                <th className="p-3 border-b font-bold">Nama Lengkap</th>
-                <th className="p-3 border-b font-bold">Kelas</th>
-                <th className="p-3 border-b font-bold text-center">Status</th>
-                <th className="p-3 border-b font-bold text-center">Aksi</th>
+                <th className="p-4 border-b border-slate-100 w-16 text-center">No</th>
+                <th className="p-4 border-b border-slate-100">Username</th>
+                <th className="p-4 border-b border-slate-100">Password</th>
+                <th className="p-4 border-b border-slate-100">Nama Lengkap</th>
+                <th className="p-4 border-b border-slate-100">Kelas</th>
+                <th className="p-4 border-b border-slate-100 text-center">Status</th>
+                <th className="p-4 border-b border-slate-100 text-center">Opsi</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-bold">Memuat data...</td></tr>
+                <tr><td colSpan={7} className="p-12 text-center text-indigo-500 font-bold animate-pulse">Memuat direktori siswa...</td></tr>
               ) : filteredSiswa.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500">Tidak ada data siswa ditemukan.</td></tr>
+                <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-medium">Tidak ada data siswa ditemukan.</td></tr>
               ) : (
                 filteredSiswa.map((s, idx) => (
-                  <tr key={s.id} className="hover:bg-blue-50 transition-colors border-b last:border-0">
-                    <td className="p-3 text-center">{idx + 1}</td>
-                    <td className="p-3 font-semibold text-gray-600">{s.username}</td>
-                    <td className="p-3 font-mono text-xs text-gray-500">{s.password}</td>
-                    <td className="p-3 font-bold text-gray-800">{s.nama}</td>
-                    <td className="p-3">
-                      <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-bold border">
+                  <tr key={s.id} className="hover:bg-indigo-50/40 transition-colors border-b border-slate-50 last:border-0 group">
+                    <td className="p-4 text-center font-bold text-slate-400">{idx + 1}</td>
+                    <td className="p-4 font-bold text-slate-700">{s.username}</td>
+                    <td className="p-4 font-mono text-xs font-semibold text-slate-400 bg-slate-50 rounded px-2 m-2 inline-block border border-slate-100">{s.password}</td>
+                    <td className="p-4 font-black text-slate-800">{s.nama}</td>
+                    <td className="p-4">
+                      <span className="bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-indigo-100/50">
                         {s.kelas?.nama_kelas || '-'}
                       </span>
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="p-4 text-center">
                       {s.status_login === '1' ? (
-                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold inline-block">Online</span>
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Online
+                        </span>
                       ) : (
-                        <span className="text-gray-400 text-xs font-semibold">Offline</span>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Offline</span>
                       )}
                     </td>
-                    <td className="p-3">
-                      <div className="flex gap-2 justify-center">
+                    <td className="p-4">
+                      <div className="flex gap-2 justify-center opacity-70 group-hover:opacity-100 transition-opacity">
                         {s.status_login === '1' && (
                           <button 
                             onClick={() => handleResetLogin(s.id)}
-                            className="text-xs bg-yellow-100 text-yellow-700 hover:bg-yellow-200 px-2 py-1 rounded font-bold border border-yellow-300"
-                            title="Reset Login"
+                            className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-bold transition-all"
+                            title="Paksa Logout Siswa"
                           >
-                            Reset
+                            Reset Sesi
                           </button>
                         )}
-                        <button onClick={() => hapusSiswa(s.id)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded" title="Hapus Siswa">
-                          <Trash2 size={16} />
+                        <button onClick={() => hapusSiswa(s.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all" title="Hapus Permanen">
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </td>
