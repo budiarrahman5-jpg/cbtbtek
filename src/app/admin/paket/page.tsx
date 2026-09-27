@@ -8,6 +8,7 @@ import { Package, Plus, Save, Trash2 } from 'lucide-react';
 export default function KelolaPaketPage() {
   const [paket, setPaket] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
 
   // Form states
   const [showForm, setShowForm] = useState(false);
@@ -18,6 +19,11 @@ export default function KelolaPaketPage() {
 
   useEffect(() => {
     fetchPaket();
+    const savedUser = localStorage.getItem('cbt_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      setIsDemo(user?.username?.startsWith('demo_admin_'));
+    }
   }, []);
 
   const fetchPaket = async () => {
@@ -29,6 +35,10 @@ export default function KelolaPaketPage() {
   };
 
   const simpanPaketBaru = async () => {
+    if (isDemo) {
+      alert('Fitur ini dinonaktifkan untuk Akun Demo.');
+      return;
+    }
     if (!namaPaket || !token) {
       alert('Nama Paket dan Token wajib diisi!');
       return;
@@ -56,11 +66,19 @@ export default function KelolaPaketPage() {
   };
 
   const updateToken = async (id: string, newToken: string) => {
+    if (isDemo) {
+      alert('Akun Demo tidak bisa mengubah token ujian.');
+      return;
+    }
     await supabase.from('paket').update({ token: newToken.toUpperCase() }).eq('id', id);
     fetchPaket();
   };
 
   const hapusPaket = async (id: string) => {
+    if (isDemo) {
+      alert('Akun Demo tidak bisa menghapus paket ujian.');
+      return;
+    }
     if (!confirm('Yakin hapus paket ini? Semua soal di dalamnya akan terhapus!')) return;
     await supabase.from('paket').delete().eq('id', id);
     fetchPaket();
@@ -72,12 +90,14 @@ export default function KelolaPaketPage() {
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Package className="text-blue-600" /> Daftar Paket Soal
         </h2>
-        <button 
-          onClick={() => setShowForm(!showForm)}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-bold flex items-center gap-2 transition"
-        >
-          <Plus size={18} /> Buat Paket Baru
-        </button>
+        {!isDemo && (
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-bold flex items-center gap-2 transition"
+          >
+            <Plus size={18} /> Buat Paket Baru
+          </button>
+        )}
       </div>
 
       {showForm && (
@@ -135,8 +155,10 @@ export default function KelolaPaketPage() {
                     <input 
                       type="text" 
                       defaultValue={p.token} 
+                      readOnly={isDemo}
                       onBlur={(e) => updateToken(p.id, e.target.value)}
-                      className="border rounded p-1 w-24 text-center font-bold uppercase focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="border rounded p-1 w-24 text-center font-bold uppercase focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                      title={isDemo ? "Akun demo tidak bisa mengubah token" : "Ubah Token"}
                     />
                   </td>
                   <td className="p-4 text-center">

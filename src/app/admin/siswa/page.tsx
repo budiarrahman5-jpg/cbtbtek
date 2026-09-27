@@ -25,8 +25,15 @@ export default function KelolaSiswaPage() {
   const [inputMode, setInputMode] = useState('single');
   const [bulkData, setBulkData] = useState('');
 
+  const [isDemo, setIsDemo] = useState(false);
+
   useEffect(() => {
     fetchData();
+    const savedUser = localStorage.getItem('cbt_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      setIsDemo(user?.username?.startsWith('demo_admin_'));
+    }
   }, []);
 
   const fetchData = async () => {
@@ -51,6 +58,7 @@ export default function KelolaSiswaPage() {
   };
 
   const simpanKelas = async () => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!namaKelas) {
       alert('Nama kelas tidak boleh kosong');
       return;
@@ -65,12 +73,14 @@ export default function KelolaSiswaPage() {
   };
 
   const hapusKelas = async (id: string) => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!confirm('Hapus kelas ini? Siswa yang terhubung akan kehilangan data kelas.')) return;
     await supabase.from('kelas').delete().eq('id', id);
     fetchData();
   };
 
   const simpanSiswaSingle = async () => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!sUsername || !sPassword || !sNama || !sKelasId) {
       alert('Lengkapi semua data siswa!');
       return;
@@ -94,6 +104,7 @@ export default function KelolaSiswaPage() {
   };
 
   const simpanSiswaBulk = async () => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!bulkData.trim()) {
       alert('Data massal kosong!');
       return;
@@ -146,12 +157,14 @@ export default function KelolaSiswaPage() {
   };
 
   const hapusSiswa = async (id: string) => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!confirm('Hapus siswa ini? Semua hasil ujiannya juga akan terhapus.')) return;
     await supabase.from('users').delete().eq('id', id);
     fetchData();
   };
 
   const handleResetLogin = async (id: string) => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
     if (!confirm('Reset status login siswa ini?')) return;
     await supabase.from('users').update({ status_login: '0' }).eq('id', id);
     fetchData();
@@ -167,6 +180,7 @@ export default function KelolaSiswaPage() {
     <div className="space-y-6">
       
       {/* BAGIAN ATAS: INPUT KELAS & SISWA */}
+      {!isDemo && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Kolom Kelola Kelas */}
@@ -291,6 +305,7 @@ export default function KelolaSiswaPage() {
           )}
         </div>
       </div>
+      )}
       
       {/* ... TABEL SISWA TETAP SEPERTI SEBELUMNYA ATAU BISA DI-UPGRADE ... */}
       {/* Memperbarui desain tabel bawah */}
@@ -352,7 +367,7 @@ export default function KelolaSiswaPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex gap-2 justify-center opacity-70 group-hover:opacity-100 transition-opacity">
-                        {s.status_login === '1' && (
+                        {s.status_login === '1' && !isDemo && (
                           <button 
                             onClick={() => handleResetLogin(s.id)}
                             className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-bold transition-all"
@@ -361,9 +376,12 @@ export default function KelolaSiswaPage() {
                             Reset Sesi
                           </button>
                         )}
-                        <button onClick={() => hapusSiswa(s.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all" title="Hapus Permanen">
-                          <Trash2 size={18} />
-                        </button>
+                        {!isDemo && (
+                          <button onClick={() => hapusSiswa(s.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-all" title="Hapus Permanen">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                        {isDemo && <span className="text-xs text-slate-400 italic">Read-Only</span>}
                       </div>
                     </td>
                   </tr>
