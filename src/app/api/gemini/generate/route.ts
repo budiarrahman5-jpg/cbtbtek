@@ -8,15 +8,15 @@ export async function POST(req: Request) {
 
     // 1. Ambil API Key dari Supabase
     const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'gemini_api_key').single();
-    const apiKey = pengaturan?.nilai;
+    const apiKey = pengaturan?.nilai?.trim();
 
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });
     }
 
-    // 2. Inisialisasi Gemini (Menggunakan gemini-pro yang sangat stabil)
+    // 2. Inisialisasi Gemini (Menggunakan gemini-1.5-flash)
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // 3. Susun Prompt berdasarkan Tipe Soal
     let systemInstruction = `Anda adalah asisten pembuat soal ujian yang profesional. Buatlah SATU soal ujian berdasarkan instruksi user.
