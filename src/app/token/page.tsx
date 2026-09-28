@@ -57,7 +57,7 @@ export default function TokenPage() {
         .select('*')
         .eq('user_id', user.id)
         .eq('paket_id', selectedPaket)
-        .single();
+        .maybeSingle();
         
       if (cekHasil) {
         setErrorMsg('Anda sudah menyelesaikan paket ujian ini! Silakan pilih paket lain.');
@@ -87,9 +87,10 @@ export default function TokenPage() {
       await supabase.from('log').insert({ user_id: user.id, aktivitas: `Mulai Ujian Paket: ${paket.nama_paket}` });
 
       router.push('/ujian');
-    } catch (error) {
-      console.error(error);
-      setErrorMsg('Terjadi kesalahan. Silakan coba lagi.');
+    } catch (error: any) {
+      console.error('Error di handleMulaiUjian:', error);
+      const errorDetail = error?.message || error?.details || '';
+      setErrorMsg(`Terjadi kesalahan. Silakan coba lagi. ${errorDetail ? '(' + errorDetail + ')' : ''}`);
     } finally {
       setIsLoading(false);
     }
