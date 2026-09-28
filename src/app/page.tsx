@@ -60,7 +60,7 @@ export default function Home() {
 
       localStorage.setItem('cbt_user', JSON.stringify(data));
       
-      if (data.role === 'admin') {
+      if (data.role.toLowerCase() === 'admin') {
         router.push('/admin');
       } else {
         router.push('/token');

@@ -25,7 +25,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     
     const parsedUser = JSON.parse(savedUser);
-    if (parsedUser.role !== 'admin') {
+    if (parsedUser.role.toLowerCase() !== 'admin') {
       router.push('/token');
       return;
     }
