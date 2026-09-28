@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function HasilUjianPage() {
@@ -228,6 +228,34 @@ export default function HasilUjianPage() {
     setIsSavingKoreksi(false);
   };
 
+  const handleResetUjian = async (hasilRow: any) => {
+    if (!confirm(`Yakin ingin mereset ujian siswa ${hasilRow.users?.nama}? Ini akan menghapus hasil secara permanen dan mereset status ujian sehingga siswa dapat mengikuti ujian ini lagi dari awal.`)) return;
+
+    try {
+      await supabase.from('hasil').delete().eq('id', hasilRow.id);
+      await supabase.from('users').update({ status_ujian: 'Belum Ujian', status_login: '0' }).eq('id', hasilRow.user_id);
+      
+      alert('Ujian berhasil direset!');
+      fetchHasil();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mereset ujian.');
+    }
+  };
+
+  const handleResetCheat = async (hasilRow: any) => {
+    if (!confirm(`Reset cheat count untuk ${hasilRow.users?.nama}?`)) return;
+
+    try {
+      await supabase.from('hasil').update({ cheat_count: 0 }).eq('id', hasilRow.id);
+      alert('Cheat count berhasil direset!');
+      fetchHasil();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal reset cheat count.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border border-gray-200">
@@ -334,9 +362,17 @@ export default function HasilUjianPage() {
                        </span>
                     </td>
                     <td className="p-3 text-center">
-                       <button onClick={() => openKoreksi(h)} className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1 rounded font-bold transition flex items-center gap-1 mx-auto">
-                          <CheckSquare size={14} /> Koreksi
-                       </button>
+                       <div className="flex items-center justify-center gap-2">
+                         <button onClick={() => openKoreksi(h)} className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1.5 rounded font-bold transition flex items-center gap-1" title="Koreksi Manual">
+                            <CheckSquare size={14} /> Koreksi
+                         </button>
+                         <button onClick={() => handleResetCheat(h)} className="text-sm bg-orange-100 text-orange-700 hover:bg-orange-200 px-2 py-1.5 rounded font-bold transition flex items-center gap-1" title="Reset Cheat">
+                            <RefreshCw size={14} />
+                         </button>
+                         <button onClick={() => handleResetUjian(h)} className="text-sm bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1.5 rounded font-bold transition flex items-center gap-1" title="Reset Ujian">
+                            <Trash2 size={14} />
+                         </button>
+                       </div>
                     </td>
                   </tr>
                 ))
