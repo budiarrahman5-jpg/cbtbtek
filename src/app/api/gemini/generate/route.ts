@@ -41,8 +41,8 @@ Format JSON yang diharapkan:
 
     const fullPrompt = `${systemInstruction}\n\nTipe Soal: ${tipe}\nInstruksi: ${prompt}`;
 
-    // 4. Panggil Gemini Menggunakan Fetch Manual (Bypass SDK Bugs)
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    // 4. Panggil Gemini Menggunakan Fetch Manual (Bypass SDK Bugs) menggunakan v1
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
