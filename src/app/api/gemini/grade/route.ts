@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const hasilIdsToRecalculate = new Set<string>();
 
     // 4. Loop & Koreksi (Bisa dioptimasi jadi batch nanti, tapi loop aman untuk sekarang)
-    for (const j of listJawaban) {
+    for (const j of listJawaban as any[]) {
       // Jika sudah ada nilai skor dan lebih dari 0, skip (asumsi sudah dikoreksi manual)
       // Namun jika kita ingin AI override, kita bisa hapus kondisi ini. 
       // Untuk amannya, kita izinkan AI mengoreksi semua yang dikirim.
