@@ -70,8 +70,7 @@ Format JSON yang diharapkan:
           { role: 'system', content: systemInstruction },
           { role: 'user', content: fullPrompt }
         ],
-        temperature: 0.7,
-        response_format: { type: "json_object" }
+        temperature: 0.7
       })
     });
 
