@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles } from 'lucide-react';
 
 export default function HasilUjianPage() {
   const [hasil, setHasil] = useState<any[]>([]);
@@ -14,6 +14,7 @@ export default function HasilUjianPage() {
   const [selectedKelas, setSelectedKelas] = useState('ALL');
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isAILoading, setIsAILoading] = useState(false);
 
   useEffect(() => {
     fetchFilters();
@@ -49,6 +50,40 @@ export default function HasilUjianPage() {
     h.users?.nama?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleKoreksiAI = async () => {
+    if (selectedPaket === 'ALL') {
+      return alert('Pilih satu paket spesifik terlebih dahulu untuk dikoreksi otomatis.');
+    }
+    
+    if (!confirm('AI akan mengoreksi dan memberikan nilai untuk semua jawaban Essay/Isian yang masih belum dinilai di paket ini. Lanjutkan?')) return;
+    
+    setIsAILoading(true);
+    try {
+      const res = await fetch('/api/gemini/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paket_id: selectedPaket })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.error === 'API_KEY_MISSING') {
+          alert('API Key Gemini belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
+        } else {
+          alert('Gagal koreksi AI: ' + data.error);
+        }
+      } else {
+        alert(`Berhasil! AI telah mengoreksi ${data.updated} soal essay/isian.`);
+        fetchHasil(); // Refresh data
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi saat memanggil AI.');
+    }
+    setIsAILoading(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm border border-gray-200">
@@ -57,10 +92,18 @@ export default function HasilUjianPage() {
             <Trophy className="text-yellow-600" /> Hasil Ujian
           </h2>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <button 
+              onClick={handleKoreksiAI}
+              disabled={isAILoading || selectedPaket === 'ALL'}
+              className="flex-1 md:flex-none bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-md"
+            >
+              <Sparkles size={18} className={isAILoading ? 'animate-spin' : 'animate-pulse'} /> 
+              <span className="hidden md:inline">{isAILoading ? 'AI Sedang Mengoreksi...' : 'Koreksi Essay AI'}</span>
+            </button>
             <button className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition">
               <Calculator size={18} /> <span className="hidden md:inline">Hitung Ulang</span>
             </button>
-            <button className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition">
+            <button className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition">
               <Download size={18} /> <span className="hidden md:inline">Download CSV</span>
             </button>
           </div>

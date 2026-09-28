@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Download, Upload, FileSpreadsheet } from 'lucide-react';
+import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Download, Upload, FileSpreadsheet, Sparkles, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import * as XLSX from 'xlsx';
 import 'react-quill-new/dist/quill.snow.css';
@@ -43,11 +43,15 @@ export default function TambahSoalPage() {
   // Opsi untuk PG (Rich Text)
   const [opsi, setOpsi] = useState({ A: '', B: '', C: '', D: '', E: '' });
 
-  // State untuk Menjodohkan
   const [jodohkanPairs, setJodohkanPairs] = useState<{id: string, premis: string, respons: string}[]>([
     { id: Math.random().toString(36).substring(7), premis: '', respons: '' }
   ]);
   const [jodohkanPengecoh, setJodohkanPengecoh] = useState<{id: string, text: string}[]>([]);
+
+  // AI Modal States
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAILoading, setIsAILoading] = useState(false);
 
   useEffect(() => {
     fetchPaket();
@@ -327,6 +331,54 @@ export default function TambahSoalPage() {
     }
   };
 
+  const handleGenerateAI = async () => {
+    if (!aiPrompt) return alert('Masukkan instruksi untuk AI terlebih dahulu!');
+    
+    // Cek API Key dari database (melalui API internal)
+    setIsAILoading(true);
+    try {
+      const res = await fetch('/api/gemini/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt, tipe: tipe })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.error === 'API_KEY_MISSING') {
+          alert('API Key Gemini belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
+          setShowAIModal(false);
+        } else {
+          alert('Gagal generate soal: ' + data.error);
+        }
+        setIsAILoading(false);
+        return;
+      }
+      
+      // Auto fill form based on type
+      setPertanyaan(data.result.pertanyaan || '');
+      setKunci(data.result.kunci || '');
+      
+      if (tipe === 'PG' || tipe === 'PG Kompleks') {
+        setOpsi({
+          A: data.result.opsi_a || '',
+          B: data.result.opsi_b || '',
+          C: data.result.opsi_c || '',
+          D: data.result.opsi_d || '',
+          E: data.result.opsi_e || ''
+        });
+      }
+      
+      setShowAIModal(false);
+      setAiPrompt('');
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi saat memanggil AI.');
+    }
+    setIsAILoading(false);
+  };
+
   return (
     <div className="bg-white p-6 md:p-8 rounded-lg shadow-sm border-t-4 border-indigo-600 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
@@ -336,6 +388,13 @@ export default function TambahSoalPage() {
         </div>
         
         <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setShowAIModal(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-sm font-bold shadow-md shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95"
+          >
+            <Sparkles size={16} className="animate-pulse" /> Buat Soal AI
+          </button>
+          
           <button 
             onClick={downloadTemplateExcel}
             className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-bold transition-colors"
@@ -546,6 +605,49 @@ export default function TambahSoalPage() {
         <Save size={24} /> SIMPAN SOAL
       </button>
       
+      {/* AI Modal */}
+      {showAIModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 border-t-4 border-indigo-500">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                <Sparkles className="text-indigo-600" /> Asisten AI B-TEK
+              </h3>
+              <button onClick={() => setShowAIModal(false)} className="text-slate-400 hover:text-red-500 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">
+              AI akan membuatkan soal sesuai <strong>Tipe Soal</strong> yang sedang Anda pilih ({tipe}).
+            </p>
+            <textarea
+              className="w-full border-2 border-slate-200 rounded-xl p-4 focus:border-indigo-500 outline-none resize-none mb-4 font-medium"
+              rows={4}
+              placeholder="Contoh: Buatkan 1 soal HOTS tentang fotosintesis untuk anak SMA, lengkap dengan pengecoh yang mengecoh."
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={isAILoading}
+            />
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowAIModal(false)}
+                className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                disabled={isAILoading}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleGenerateAI}
+                disabled={isAILoading}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors"
+              >
+                {isAILoading ? 'Menenun Sihir AI...' : <><Sparkles size={18} /> Generate Sekarang</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* KaTeX CSS Global untuk render */}
       <style dangerouslySetInnerHTML={{__html: `
         .ql-editor { font-size: 16px; font-family: inherit; }

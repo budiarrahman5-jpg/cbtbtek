@@ -13,6 +13,7 @@ export default function PengaturanPage() {
     nilai_kkm: '75',
     proteksi_layar: 'ON',
     kode_buka_blokir: 'BUKA123',
+    gemini_api_key: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -223,6 +224,23 @@ export default function PengaturanPage() {
               className="w-full border-2 p-3 rounded-md focus:ring-red-500 focus:border-red-500 outline-none font-bold text-red-800 bg-red-50" 
             />
           </div>
+        </div>
+
+        {/* AI Gemini API Key */}
+        <div className="pt-4 border-t border-gray-200">
+          <label className="block font-bold text-sm mb-1 text-indigo-700 flex items-center gap-2">
+            ✨ API Key Gemini (Google AI)
+          </label>
+          <input 
+            type="password" 
+            placeholder="AIzaSyAxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            value={settings.gemini_api_key} onChange={e=>handleChange('gemini_api_key', e.target.value)}
+            className="w-full border-2 p-3 rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-sm bg-indigo-50 border-indigo-100 placeholder:text-indigo-300" 
+          />
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            API Key ini diperlukan untuk mengaktifkan fitur <strong>Koreksi Essay Otomatis</strong> dan <strong>Pembuat Soal AI</strong>. 
+            Anda bisa mendapatkannya secara gratis di <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline">Google AI Studio</a>. Biarkan kosong jika Anda tidak ingin menggunakan fitur AI.
+          </p>
         </div>
 
         <button 
