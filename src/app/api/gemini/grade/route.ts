@@ -6,7 +6,7 @@ export async function POST(req: Request) {
     const { paket_id } = await req.json();
 
     // 1. Ambil API Key
-    const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'gemini_api_key').single();
+    const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'groq_api_key').single();
     const apiKey = pengaturan?.nilai?.trim();
 
     if (!apiKey || apiKey.trim() === '') {
@@ -54,20 +54,23 @@ Jawaban Siswa: ${j.jawaban_teks}
 PENTING: Output Anda HARUS HANYA ANGKA (contoh: 8) tanpa teks tambahan apapun.`;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
+            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
+            model: 'llama3-8b-8192',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1
           })
         });
 
         const data = await response.json();
         
         if (response.ok) {
-          const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const textResponse = data.choices?.[0]?.message?.content || '';
           const skorAI = parseInt(textResponse.replace(/[^0-9]/g, ''));
           
           if (!isNaN(skorAI)) {
@@ -80,7 +83,7 @@ PENTING: Output Anda HARUS HANYA ANGKA (contoh: 8) tanpa teks tambahan apapun.`;
           console.error(`Gagal mengoreksi jawaban ID ${j.id}:`, data.error);
         }
       } catch (aiErr) {
-        console.error(`Gagal koneksi ke Gemini untuk jawaban ID ${j.id}:`, aiErr);
+        console.error(`Gagal koneksi ke Groq untuk jawaban ID ${j.id}:`, aiErr);
       }
     }
 

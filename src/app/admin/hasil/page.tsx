@@ -69,7 +69,7 @@ export default function HasilUjianPage() {
       
       if (!res.ok) {
         if (data.error === 'API_KEY_MISSING') {
-          alert('API Key Gemini belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
+          alert('API Key Groq AI belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
         } else {
           alert('Gagal koreksi AI: ' + data.error);
         }

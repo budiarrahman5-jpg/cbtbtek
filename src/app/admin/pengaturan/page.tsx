@@ -13,7 +13,7 @@ export default function PengaturanPage() {
     nilai_kkm: '75',
     proteksi_layar: 'ON',
     kode_buka_blokir: 'BUKA123',
-    gemini_api_key: '',
+    groq_api_key: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -226,20 +226,20 @@ export default function PengaturanPage() {
           </div>
         </div>
 
-        {/* AI Gemini API Key */}
+        {/* AI Groq API Key */}
         <div className="pt-4 border-t border-gray-200">
-          <label className="block font-bold text-sm mb-1 text-indigo-700 flex items-center gap-2">
-            ✨ API Key Gemini (Google AI)
+          <label className="block font-bold text-sm mb-1 text-purple-700 flex items-center gap-2">
+            ✨ API Key AI (Groq / Llama 3)
           </label>
           <input 
             type="password" 
-            placeholder="AIzaSyAxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            value={settings.gemini_api_key} onChange={e=>handleChange('gemini_api_key', e.target.value)}
-            className="w-full border-2 p-3 rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono text-sm bg-indigo-50 border-indigo-100 placeholder:text-indigo-300" 
+            placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            value={settings.groq_api_key || ''} onChange={e=>handleChange('groq_api_key', e.target.value)}
+            className="w-full border-2 p-3 rounded-md focus:ring-purple-500 focus:border-purple-500 outline-none font-mono text-sm bg-purple-50 border-purple-100 placeholder:text-purple-300" 
           />
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             API Key ini diperlukan untuk mengaktifkan fitur <strong>Koreksi Essay Otomatis</strong> dan <strong>Pembuat Soal AI</strong>. 
-            Anda bisa mendapatkannya secara gratis di <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline">Google AI Studio</a>. Biarkan kosong jika Anda tidak ingin menggunakan fitur AI.
+            Kami sangat menyarankan <strong>Groq AI</strong> karena 100% Gratis, Kuota Sangat Besar, dan Jauh Lebih Cepat. Dapatkan gratis di <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-purple-600 font-bold underline">Groq Console</a>.
           </p>
         </div>
 
