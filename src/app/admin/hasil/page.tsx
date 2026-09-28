@@ -20,7 +20,7 @@ export default function HasilUjianPage() {
   const [modalKoreksi, setModalKoreksi] = useState<{isOpen: boolean, data: any, soalList: any[]}>({
     isOpen: false, data: null, soalList: []
   });
-  const [skorManual, setSkorManual] = useState<number>(0);
+  const [skorManual, setSkorManual] = useState<Record<string, number>>({});
   const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);  useEffect(() => {
     fetchFilters();
     fetchHasil();
@@ -174,8 +174,10 @@ export default function HasilUjianPage() {
               }
             } catch(e) {}
           }
-          else if (soal.tipe === 'Isian') {
-             if (soal.kunci && String(jwbSiswa).toLowerCase().trim() === soal.kunci.toLowerCase().trim()) {
+          else if (soal.tipe === 'Essay' || soal.tipe === 'Isian') {
+             if (jawaban[`koreksi_${soal.id}`] !== undefined) {
+               totalSkorBenar += Number(jawaban[`koreksi_${soal.id}`]);
+             } else if (soal.tipe === 'Isian' && soal.kunci && String(jwbSiswa).toLowerCase().trim() === soal.kunci.toLowerCase().trim()) {
                 totalSkorBenar += bobot;
              }
           }
@@ -199,7 +201,9 @@ export default function HasilUjianPage() {
 
   const openKoreksi = async (hasilRow: any) => {
     setModalKoreksi({ isOpen: true, data: hasilRow, soalList: [] });
-    setSkorManual(hasilRow.skor_akhir || 0);
+    
+    const initialSkor: Record<string, number> = {};
+    const detailJawaban = hasilRow.detail_jawaban || {};
 
     const { data: soalData } = await supabase
         .from('paket_soal')
@@ -207,18 +211,84 @@ export default function HasilUjianPage() {
         .eq('paket_id', hasilRow.paket_id);
         
     if (soalData) {
-       setModalKoreksi(prev => ({ ...prev, soalList: soalData.map((s: any) => s.soal) }));
+       const sList = soalData.map((s: any) => s.soal);
+       sList.forEach((s: any) => {
+         if (['Essay', 'Isian'].includes(s.tipe)) {
+           initialSkor[s.id] = detailJawaban[`koreksi_${s.id}`] || 0;
+         }
+       });
+       setSkorManual(initialSkor);
+       setModalKoreksi(prev => ({ ...prev, soalList: sList }));
     }
   };
 
   const saveKoreksiManual = async () => {
     setIsSavingKoreksi(true);
     try {
+      const h = modalKoreksi.data;
+      const jawaban = { ...h.detail_jawaban };
+      
+      for (const [soalId, score] of Object.entries(skorManual)) {
+        jawaban[`koreksi_${soalId}`] = score;
+      }
+
+      let totalSkorBenar = 0;
+      let totalSkorMaks = 0;
+      
+      modalKoreksi.soalList.forEach((soal: any) => {
+        const bobot = soal.skor_maks || 10;
+        totalSkorMaks += bobot;
+        
+        const jwbSiswa = jawaban[soal.id];
+        if (!jwbSiswa && !['Essay', 'Isian'].includes(soal.tipe)) return;
+        
+        if (soal.tipe === 'PG') {
+          if (jwbSiswa === soal.kunci?.toUpperCase()) totalSkorBenar += bobot;
+        } 
+        else if (soal.tipe === 'PG Kompleks') {
+          const kunciArr = (soal.kunci || '').split(',').map((k: string) => k.trim().toUpperCase());
+          let benarCount = 0;
+          if (Array.isArray(jwbSiswa)) {
+             jwbSiswa.forEach(j => {
+               if (kunciArr.includes(j)) benarCount++;
+             });
+             if (kunciArr.length > 0) {
+               totalSkorBenar += (benarCount / kunciArr.length) * bobot;
+             }
+          }
+        }
+        else if (soal.tipe === 'Menjodohkan') {
+          try {
+            const kunciAsli = JSON.parse(soal.kunci || '[]');
+            let benarCount = 0;
+            if (Array.isArray(jwbSiswa)) {
+               jwbSiswa.forEach((j: any) => {
+                 if (kunciAsli.find((k:any) => k.premisId === j.premisId && k.responsId === j.responsId)) {
+                   benarCount++;
+                 }
+               });
+            }
+            if (kunciAsli.length > 0) {
+               totalSkorBenar += (benarCount / kunciAsli.length) * bobot;
+            }
+          } catch(e) {}
+        }
+        else if (soal.tipe === 'Essay' || soal.tipe === 'Isian') {
+           if (jawaban[`koreksi_${soal.id}`] !== undefined) {
+             totalSkorBenar += Number(jawaban[`koreksi_${soal.id}`]);
+           } else if (soal.tipe === 'Isian' && soal.kunci && String(jwbSiswa).toLowerCase().trim() === soal.kunci.toLowerCase().trim()) {
+              totalSkorBenar += bobot;
+           }
+        }
+      });
+
+      const finalSkor = totalSkorMaks > 0 ? Math.round((totalSkorBenar / totalSkorMaks) * 100) : 0;
+
       await supabase.from('hasil')
-        .update({ skor_akhir: skorManual, status_koreksi: 'Selesai' })
+        .update({ skor_akhir: finalSkor, detail_jawaban: jawaban, status_koreksi: 'Selesai' })
         .eq('id', modalKoreksi.data.id);
         
-      alert('Nilai berhasil diperbarui!');
+      alert(`Nilai berhasil disimpan! Skor akhir dikalkulasi menjadi: ${finalSkor}`);
       setModalKoreksi({ isOpen: false, data: null, soalList: [] });
       fetchHasil();
     } catch (err) {
@@ -382,63 +452,97 @@ export default function HasilUjianPage() {
         </div>
       </div>
 
-      {/* Modal Koreksi Manual */}
+      {/* Modal Koreksi Manual Premium */}
       {modalKoreksi.isOpen && modalKoreksi.data && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div className="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-              <h3 className="font-bold text-lg">Koreksi Manual - {modalKoreksi.data.users?.nama}</h3>
-              <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="text-gray-500 hover:text-red-500 font-bold">✕</button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+              <div>
+                <h3 className="font-extrabold text-xl text-slate-800 flex items-center gap-2">
+                  <CheckSquare className="text-indigo-600" /> Koreksi Jawaban
+                </h3>
+                <p className="text-sm text-slate-500 font-medium mt-1">Peserta: <span className="text-indigo-600">{modalKoreksi.data.users?.nama}</span></p>
+              </div>
+              <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-colors">
+                 ✕
+              </button>
             </div>
             
-            <div className="p-5 overflow-y-auto flex-grow bg-slate-50">
-              <div className="mb-4 bg-white p-4 rounded border">
-                 <p className="text-sm text-gray-500 mb-4">Detail Jawaban Siswa (Essay/Isian):</p>
-                 {modalKoreksi.soalList.length === 0 ? (
-                    <p className="text-gray-400 italic text-sm">Memuat detail soal...</p>
-                 ) : (
-                    <div className="space-y-6">
-                      {modalKoreksi.soalList.filter(s => ['Essay', 'Isian'].includes(s.tipe)).map((soal, i) => (
-                        <div key={soal.id} className="border-b pb-4 last:border-0 last:pb-0">
-                           <div className="font-semibold text-sm mb-2 text-gray-800 flex gap-2">
-                              <span className="text-indigo-600 font-black">Q:</span> 
-                              <span dangerouslySetInnerHTML={{__html: soal.pertanyaan}} />
+            <div className="p-6 overflow-y-auto flex-grow bg-slate-50/50 custom-scrollbar">
+               {modalKoreksi.soalList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                     <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                     <p className="text-indigo-600 font-bold animate-pulse">Memuat lembar jawaban...</p>
+                  </div>
+               ) : (
+                  <div className="space-y-6">
+                    {modalKoreksi.soalList.filter(s => ['Essay', 'Isian'].includes(s.tipe)).map((soal, i) => (
+                      <div key={soal.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md">
+                         <div className="flex justify-between items-start mb-4 gap-4 flex-col sm:flex-row">
+                            <div className="flex-1">
+                               <div className="flex items-center gap-3 mb-2">
+                                 <span className="bg-slate-100 text-slate-600 font-black px-3 py-1 rounded-lg text-sm">No. {i+1}</span>
+                                 <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">{soal.tipe}</span>
+                               </div>
+                               <div className="font-semibold text-slate-800 prose prose-sm max-w-none prose-p:my-1" dangerouslySetInnerHTML={{__html: soal.pertanyaan}} />
+                            </div>
+                            <div className="flex flex-col items-end gap-2 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 min-w-[140px] w-full sm:w-auto">
+                               <label className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Beri Nilai</label>
+                               <div className="flex items-center gap-2">
+                                  <input 
+                                    type="number" 
+                                    min="0"
+                                    max={soal.skor_maks || 10}
+                                    value={skorManual[soal.id] ?? 0} 
+                                    onChange={e => setSkorManual(prev => ({...prev, [soal.id]: Number(e.target.value)}))}
+                                    className="border-2 border-indigo-200 rounded-lg px-3 py-2 w-20 font-black text-xl text-center text-indigo-700 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all"
+                                  />
+                                  <span className="text-slate-400 font-bold text-lg">/ {soal.skor_maks || 10}</span>
+                               </div>
+                            </div>
+                         </div>
+                         
+                         {soal.kunci && (
+                           <div className="mb-4 text-sm bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                              <span className="font-bold text-emerald-700 block mb-1 text-xs uppercase tracking-wider flex items-center gap-1"><CheckSquare size={14}/> Kunci Jawaban Indikator</span> 
+                              <div className="text-emerald-900 font-medium" dangerouslySetInnerHTML={{__html: soal.kunci}} />
                            </div>
-                           <div className="text-sm text-gray-600 mb-2">
-                              <span className="font-semibold text-emerald-600">Kunci Jawaban:</span> {soal.kunci || '-'} (Bobot: {soal.skor_maks || 10})
-                           </div>
-                           <div className="text-sm bg-blue-50 p-3 rounded text-blue-900 border border-blue-100">
-                             <span className="font-semibold block mb-1">Jawaban Siswa:</span> 
-                             {modalKoreksi.data.detail_jawaban[soal.id] || <span className="italic text-gray-400">Tidak dijawab</span>}
-                           </div>
-                        </div>
-                      ))}
-                      {modalKoreksi.soalList.filter(s => ['Essay', 'Isian'].includes(s.tipe)).length === 0 && (
-                         <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded">Tidak ada soal bertipe Essay atau Isian di paket ini.</p>
-                      )}
-                    </div>
-                 )}
-              </div>
+                         )}
+
+                         <div className="text-sm bg-slate-50 p-4 rounded-xl border border-slate-200">
+                           <span className="font-bold text-slate-500 block mb-2 text-xs uppercase tracking-wider">Jawaban Siswa</span> 
+                           {modalKoreksi.data.detail_jawaban[soal.id] ? (
+                             <div className="text-slate-800 font-medium whitespace-pre-wrap">{modalKoreksi.data.detail_jawaban[soal.id]}</div>
+                           ) : (
+                             <span className="italic text-slate-400 font-medium">Kosong (Tidak dijawab)</span>
+                           )}
+                         </div>
+                      </div>
+                    ))}
+                    
+                    {modalKoreksi.soalList.filter(s => ['Essay', 'Isian'].includes(s.tipe)).length === 0 && (
+                       <div className="flex flex-col items-center justify-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                          <CheckSquare size={48} className="text-slate-300 mb-4" />
+                          <h4 className="text-slate-800 font-bold text-lg mb-1">Tidak Ada Essay/Isian</h4>
+                          <p className="text-slate-500 font-medium text-center">Paket ini hanya berisi soal Pilihan Ganda atau Menjodohkan yang sudah dikoreksi otomatis.</p>
+                       </div>
+                    )}
+                  </div>
+               )}
             </div>
 
-            <div className="p-5 border-t bg-white rounded-b-xl flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                 <label className="font-bold text-gray-700">Override Skor Akhir:</label>
-                 <input 
-                   type="number" 
-                   value={skorManual} 
-                   onChange={e => setSkorManual(Number(e.target.value))}
-                   className="border-2 border-indigo-200 rounded px-3 py-1.5 w-24 font-bold text-lg text-center focus:outline-none focus:border-indigo-500"
-                 />
-              </div>
-              <div className="flex gap-2">
-                 <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-100 rounded transition">Batal</button>
+            <div className="p-6 border-t border-slate-100 bg-white flex flex-col-reverse sm:flex-row justify-between items-center gap-4">
+               <p className="text-sm text-slate-500 font-medium text-center sm:text-left">
+                 Nilai akhir akan dikalkulasi otomatis berdasarkan bobot soal keseluruhan.
+               </p>
+               <div className="flex gap-3 w-full sm:w-auto">
+                 <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="flex-1 sm:flex-none px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
                  <button 
                    onClick={saveKoreksiManual} 
                    disabled={isSavingKoreksi}
-                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded font-bold transition flex items-center gap-2"
+                   className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                  >
-                   {isSavingKoreksi ? 'Menyimpan...' : 'Simpan Nilai'}
+                   {isSavingKoreksi ? 'Mengkalkulasi...' : 'Simpan Nilai'}
                  </button>
               </div>
             </div>
