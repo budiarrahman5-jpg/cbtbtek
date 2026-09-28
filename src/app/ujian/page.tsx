@@ -236,6 +236,15 @@ export default function UjianPage() {
     
     setUser(u);
     setPaket(p);
+    
+    const timerKey = `cbt_timer_${u.id}_${p.id}`;
+    const savedTimer = localStorage.getItem(timerKey);
+    if (savedTimer) {
+      setSisaWaktu(parseInt(savedTimer, 10));
+    } else {
+      setSisaWaktu((p.durasi_menit || 60) * 60);
+    }
+
     fetchSoal(p.id);
   }, [router]);
 
@@ -245,20 +254,25 @@ export default function UjianPage() {
   };
 
   useEffect(() => {
-    if (!paket) return;
+    if (!paket || !user) return;
+    const timerKey = `cbt_timer_${user.id}_${paket.id}`;
+    
     const interval = setInterval(() => {
       setSisaWaktu((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          localStorage.removeItem(timerKey);
           handleSelesai();
           return 0;
         }
-        return prev - 1;
+        const nextVal = prev - 1;
+        localStorage.setItem(timerKey, nextVal.toString());
+        return nextVal;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [paket]);
+  }, [paket, user]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -345,6 +359,7 @@ export default function UjianPage() {
       await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0' }).eq('id', user.id);
       
       localStorage.removeItem('cbt_paket');
+      localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
       alert('Ujian berhasil diselesaikan!');
       router.push('/');
     } catch (err) {
