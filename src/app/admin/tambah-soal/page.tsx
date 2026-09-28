@@ -389,8 +389,9 @@ export default function TambahSoalPage() {
         
         <div className="flex flex-wrap gap-2">
           <button 
-            onClick={() => setShowAIModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-sm font-bold shadow-md shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95"
+            onClick={() => alert('Fitur Pembuat Soal AI sedang dalam tahap pengembangan dan kalibrasi dengan API Groq. Silakan gunakan pembuatan soal manual untuk sementara waktu.')}
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 text-white rounded-lg text-sm font-bold shadow-md transition-all cursor-not-allowed"
+            title="Sedang Dalam Pengembangan"
           >
             <Sparkles size={16} className="animate-pulse" /> Buat Soal AI
           </button>
