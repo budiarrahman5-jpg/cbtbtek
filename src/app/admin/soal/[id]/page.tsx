@@ -70,7 +70,12 @@ export default function EditSoalPage() {
       setSkor(data.skor_maks);
       
       if (data.tipe === 'PG' || data.tipe === 'PG Kompleks') {
-        setOpsi({ A: data.opsi_a, B: data.opsi_b, C: data.opsi_c, D: data.opsi_d, E: data.opsi_e });
+        const wrapHTML = (txt: string) => {
+          if (!txt) return '';
+          if (txt.trim().startsWith('<')) return txt;
+          return `<p>${txt}</p>`;
+        };
+        setOpsi({ A: wrapHTML(data.opsi_a), B: wrapHTML(data.opsi_b), C: wrapHTML(data.opsi_c), D: wrapHTML(data.opsi_d), E: wrapHTML(data.opsi_e) });
         setKunci(data.kunci);
       } else if (data.tipe === 'Essay' || data.tipe === 'Isian') {
         setKunci(data.kunci);
@@ -292,7 +297,7 @@ export default function EditSoalPage() {
                 <ReactQuill 
                   theme="snow" 
                   value={(opsi as any)[opt]} 
-                  onChange={(val) => setOpsi({...opsi, [opt]: val})} 
+                  onChange={(val) => setOpsi(prev => ({...prev, [opt]: val}))} 
                   modules={modules}
                   formats={formats}
                 />
@@ -305,7 +310,7 @@ export default function EditSoalPage() {
               <ReactQuill 
                 theme="snow" 
                 value={opsi.E} 
-                onChange={(val) => setOpsi({...opsi, E: val})} 
+                onChange={(val) => setOpsi(prev => ({...prev, E: val}))} 
                 modules={modules}
                 formats={formats}
               />
