@@ -31,6 +31,12 @@ export default function BankSoalPage() {
     fetchBankSoal();
   };
 
+  const hapusPermanen = async (id: string) => {
+    if (!confirm('Yakin ingin menghapus paket ini PERMANEN beserta strukturnya? (Soal akan tetap ada di Kelola Soal)')) return;
+    await supabase.from('paket').delete().eq('id', id);
+    fetchBankSoal();
+  };
+
   const openPratinjau = async (p: any) => {
     setPreviewPaket(p);
     setIsPreviewLoading(true);
@@ -89,6 +95,9 @@ export default function BankSoalPage() {
                       </select>
                       <button onClick={() => openPratinjau(p)} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 p-2 rounded transition-colors" title="Pratinjau Soal di Paket ini">
                         <Eye size={18} />
+                      </button>
+                      <button onClick={() => hapusPermanen(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="Hapus Permanen">
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </td>

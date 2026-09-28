@@ -33,7 +33,7 @@ export default function KelolaPaketPage() {
 
   const fetchPaket = async () => {
     setIsLoading(true);
-    let { data } = await supabase.from('paket').select('*').order('created_at', { ascending: false });
+    let { data } = await supabase.from('paket').select('*').neq('status', 'Diarsipkan').order('created_at', { ascending: false });
     data = filterDemoData(data, 'paket');
     if (data) setPaket(data);
     setIsLoading(false);
@@ -81,11 +81,11 @@ export default function KelolaPaketPage() {
 
   const hapusPaket = async (id: string) => {
     if (isDemo) {
-      alert('Akun Demo tidak bisa menghapus paket ujian.');
+      alert('Akun Demo tidak bisa mengarsipkan paket ujian.');
       return;
     }
-    if (!confirm('Yakin hapus paket ujian ini? (Soal akan tetap aman di Bank Soal)')) return;
-    await supabase.from('paket').delete().eq('id', id);
+    if (!confirm('Yakin ingin memindahkan paket ini ke menu Bank Soal (Arsip)?')) return;
+    await supabase.from('paket').update({ status: 'Diarsipkan' }).eq('id', id);
     fetchPaket();
   };
 
@@ -205,7 +205,7 @@ export default function KelolaPaketPage() {
                       <button onClick={() => openPratinjau(p)} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 p-2 rounded transition-colors" title="Pratinjau Soal">
                         <Eye size={18} />
                       </button>
-                      <button onClick={() => hapusPaket(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="Hapus Paket">
+                      <button onClick={() => hapusPaket(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="Pindahkan ke Bank Soal (Arsip)">
                         <Trash2 size={18} />
                       </button>
                     </div>
