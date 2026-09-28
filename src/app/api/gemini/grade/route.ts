@@ -31,8 +31,25 @@ export async function POST(req: Request) {
       .neq('jawaban_teks', '');
 
     if (errJawab) throw errJawab;
+
     if (!listJawaban || listJawaban.length === 0) {
       return NextResponse.json({ updated: 0, message: 'Tidak ada jawaban essay/isian yang perlu dikoreksi.' });
+    }
+
+    // 3. Ambil daftar model aktif dari Groq (Anti-Decommission)
+    let activeModel = 'llama-3.3-70b-versatile'; // Fallback
+    try {
+      const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        // Cari model Llama terbaru, jika tidak ada ambil model teks pertama
+        const llamaModel = modelsData.data?.find((m: any) => m.id.includes('llama') && !m.id.includes('vision') && !m.id.includes('audio'));
+        activeModel = llamaModel ? llamaModel.id : (modelsData.data?.[0]?.id || activeModel);
+      }
+    } catch (e) {
+      console.warn("Gagal mengambil list model Groq, menggunakan fallback:", e);
     }
 
     let updatedCount = 0;
@@ -61,7 +78,7 @@ PENTING: Output Anda HARUS HANYA ANGKA (contoh: 8) tanpa teks tambahan apapun.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'mixtral-8x7b-32768',
+            model: activeModel,
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.1
           })
