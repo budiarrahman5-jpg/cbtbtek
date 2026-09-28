@@ -57,7 +57,8 @@ export default function KelolaPaketPage() {
     });
     
     if (error) {
-      alert('Gagal menyimpan paket!');
+      alert('Gagal: ' + error.message);
+      console.error(error);
     } else {
       setShowForm(false);
       setNamaPaket(''); setDeskripsi(''); setDurasi(60); setToken('');
