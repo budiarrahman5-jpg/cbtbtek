@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
@@ -13,10 +12,6 @@ export async function POST(req: Request) {
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });
     }
-
-    // 2. Inisialisasi Gemini (Menggunakan gemini-1.5-flash)
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // 3. Susun Prompt berdasarkan Tipe Soal
     let systemInstruction = `Anda adalah asisten pembuat soal ujian yang profesional. Buatlah SATU soal ujian berdasarkan instruksi user.
@@ -46,11 +41,26 @@ Format JSON yang diharapkan:
 
     const fullPrompt = `${systemInstruction}\n\nTipe Soal: ${tipe}\nInstruksi: ${prompt}`;
 
-    // 4. Panggil Gemini
-    const result = await model.generateContent(fullPrompt);
-    const text = result.response.text();
+    // 4. Panggil Gemini Menggunakan Fetch Manual (Bypass SDK Bugs)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: fullPrompt }] }]
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Gemini API Error Response:", data);
+      return NextResponse.json({ error: data.error?.message || 'Gagal memanggil Gemini API' }, { status: response.status });
+    }
     
     // 5. Ekstrak JSON
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     let parsedResult;
     try {
       // Bersihkan markdown jika Gemini masih bandel mengembalikan ```json

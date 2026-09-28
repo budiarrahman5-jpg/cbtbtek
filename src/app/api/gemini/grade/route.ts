@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
@@ -36,10 +35,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ updated: 0, message: 'Tidak ada jawaban essay/isian yang perlu dikoreksi.' });
     }
 
-    // 3. Inisialisasi Gemini
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     let updatedCount = 0;
     const hasilIdsToRecalculate = new Set<string>();
 
@@ -59,22 +54,33 @@ Jawaban Siswa: ${j.jawaban_teks}
 PENTING: Output Anda HARUS HANYA ANGKA (contoh: 8) tanpa teks tambahan apapun.`;
 
       try {
-        const result = await model.generateContent(prompt);
-        const textResponse = result.response.text().trim();
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        });
+
+        const data = await response.json();
         
-        // Coba ekstrak angka
-        const skorAI = parseInt(textResponse.replace(/[^0-9]/g, ''));
-        
-        if (!isNaN(skorAI)) {
-          // Pastikan skor tidak melebihi skor_maks
-          const finalSkor = Math.min(skorAI, j.soal.skor_maks);
+        if (response.ok) {
+          const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const skorAI = parseInt(textResponse.replace(/[^0-9]/g, ''));
           
-          await supabase.from('jawaban').update({ skor: finalSkor }).eq('id', j.id);
-          updatedCount++;
-          hasilIdsToRecalculate.add(j.hasil_id);
+          if (!isNaN(skorAI)) {
+            const finalSkor = Math.min(skorAI, j.soal.skor_maks);
+            await supabase.from('jawaban').update({ skor: finalSkor }).eq('id', j.id);
+            updatedCount++;
+            hasilIdsToRecalculate.add(j.hasil_id);
+          }
+        } else {
+          console.error(`Gagal mengoreksi jawaban ID ${j.id}:`, data.error);
         }
       } catch (aiErr) {
-        console.error(`Gagal mengoreksi jawaban ID ${j.id}:`, aiErr);
+        console.error(`Gagal koneksi ke Gemini untuk jawaban ID ${j.id}:`, aiErr);
       }
     }
 
