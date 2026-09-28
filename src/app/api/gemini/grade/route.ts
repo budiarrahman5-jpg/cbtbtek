@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     // 3. Inisialisasi Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     let updatedCount = 0;
     const hasilIdsToRecalculate = new Set<string>();
