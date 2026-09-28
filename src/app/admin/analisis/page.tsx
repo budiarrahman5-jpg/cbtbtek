@@ -39,8 +39,8 @@ export default function AnalisisSoalPage() {
       
     let dataSoal = relData ? relData.map((r: any) => r.soal).sort((a: any, b: any) => a.id.localeCompare(b.id)) : [];
       
-    dataSoal = filterDemoData(dataSoal, 'soal');
-    if (dataSoal) setSoalList(dataSoal);
+    const filteredSoal = filterDemoData(dataSoal, 'soal');
+    if (filteredSoal) setSoalList(filteredSoal);
 
     // 2. Ambil semua hasil dari paket ini
     let { data: hasilData } = await supabase
