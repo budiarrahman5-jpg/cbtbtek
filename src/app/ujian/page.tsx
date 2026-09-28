@@ -244,6 +244,14 @@ export default function UjianPage() {
       setCheatCount(parseInt(savedCheat, 10));
     }
     
+    const jwbKey = `cbt_jawaban_${u.id}_${p.id}`;
+    const savedJwb = localStorage.getItem(jwbKey);
+    if (savedJwb) setJawaban(JSON.parse(savedJwb));
+    
+    const rguKey = `cbt_ragu_${u.id}_${p.id}`;
+    const savedRgu = localStorage.getItem(rguKey);
+    if (savedRgu) setRagu(JSON.parse(savedRgu));
+    
     const timerKey = `cbt_timer_${u.id}_${p.id}`;
     const savedTimer = localStorage.getItem(timerKey);
     if (savedTimer) {
@@ -270,8 +278,9 @@ export default function UjianPage() {
           localStorage.setItem(`cbt_cheat_${user.id}_${paket.id}`, newCount.toString());
           return newCount;
         });
-      } else {
-        alert('PERINGATAN! Anda terdeteksi keluar dari layar ujian atau membuka tab lain. Pelanggaran ini telah dicatat oleh sistem.');
+        
+        alert('PELANGGARAN! Anda terdeteksi keluar dari layar ujian atau berpindah aplikasi. Anda dikeluarkan dari ujian dan harus meminta izin pengawas untuk memasukkan token kembali.');
+        window.location.href = '/token';
       }
     };
 
@@ -315,11 +324,19 @@ export default function UjianPage() {
   };
 
   const handleJawaban = (idSoal: string, answer: any) => {
-    setJawaban(prev => ({ ...prev, [idSoal]: answer }));
+    setJawaban(prev => {
+      const next = { ...prev, [idSoal]: answer };
+      localStorage.setItem(`cbt_jawaban_${user.id}_${paket.id}`, JSON.stringify(next));
+      return next;
+    });
   };
 
   const toggleRagu = (idSoal: string) => {
-    setRagu(prev => ({ ...prev, [idSoal]: !prev[idSoal] }));
+    setRagu(prev => {
+      const next = { ...prev, [idSoal]: !prev[idSoal] };
+      localStorage.setItem(`cbt_ragu_${user.id}_${paket.id}`, JSON.stringify(next));
+      return next;
+    });
   };
 
   const handleSelesai = async () => {
@@ -395,6 +412,8 @@ export default function UjianPage() {
       localStorage.removeItem('cbt_paket');
       localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
       localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
+      localStorage.removeItem(`cbt_jawaban_${user.id}_${paket.id}`);
+      localStorage.removeItem(`cbt_ragu_${user.id}_${paket.id}`);
       alert('Ujian berhasil diselesaikan!');
       router.push('/');
     } catch (err) {

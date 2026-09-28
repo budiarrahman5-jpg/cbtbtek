@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function PantauSiswaPage() {
@@ -54,6 +54,20 @@ export default function PantauSiswaPage() {
       alert('Status login berhasil direset.');
     } catch (error) {
       alert('Gagal mereset status login.');
+    }
+  };
+
+  const handleResetUjian = async (id: string, nama: string) => {
+    if (!confirm(`Yakin ingin mereset ujian siswa ${nama}? Ini akan menghapus hasil secara permanen dan mereset status ujian sehingga siswa dapat mengikuti ujian ini lagi dari awal.`)) return;
+
+    try {
+      await supabase.from('hasil').delete().eq('user_id', id);
+      await supabase.from('users').update({ status_ujian: 'Belum Ujian', status_login: '0' }).eq('id', id);
+      
+      alert('Ujian berhasil direset!');
+      fetchData(false);
+    } catch (error) {
+      alert('Gagal mereset ujian.');
     }
   };
 
@@ -185,17 +199,24 @@ export default function PantauSiswaPage() {
                         )}
                       </td>
                       <td className="p-4 text-center">
-                        {isOnline ? (
+                        <div className="flex items-center justify-center gap-2">
+                          {isOnline && (
+                            <button 
+                              onClick={() => handleResetLogin(s.id, s.nama)}
+                              className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white px-3 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+                              title="Jika siswa mengalami error/keluar mendadak dan tidak bisa login"
+                            >
+                              <PowerOff size={14} /> Reset Sesi
+                            </button>
+                          )}
                           <button 
-                            onClick={() => handleResetLogin(s.id, s.nama)}
-                            className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white px-3 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-2 mx-auto"
-                            title="Jika siswa mengalami error/keluar mendadak dan tidak bisa login"
+                            onClick={() => handleResetUjian(s.id, s.nama)}
+                            className="text-xs bg-red-100 text-red-700 hover:bg-red-500 hover:text-white px-3 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+                            title="Hapus hasil dan kembalikan status ke Belum Ujian"
                           >
-                            <PowerOff size={14} /> Reset Sesi
+                            <Trash2 size={14} /> Reset Ujian
                           </button>
-                        ) : (
-                          <span className="text-slate-300 text-xs font-medium">-</span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
