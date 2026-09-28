@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   LayoutDashboard, Users, Package, Archive, 
   FileText, PlusCircle, Trophy, PieChart, 
-  Settings, Server, Menu, X, LogOut, ChevronRight, MonitorPlay
+  Settings, Server, Menu, X, LogOut, ChevronRight, MonitorPlay, Bell
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -16,6 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('cbt_user');
@@ -71,6 +72,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user]);
 
   const isDemoMode = user?.username?.startsWith('demo_admin_');
+
+  // Sinkronisasi Pengumuman dari Developer
+  useEffect(() => {
+    const syncNotifikasi = async () => {
+      try {
+        const res = await fetch('/pengumuman.json?t=' + Date.now());
+        if (!res.ok) return;
+        const pengumumans = await res.json();
+        
+        const { data: dbNotifs, error: dbErr } = await supabase.from('notifikasi').select('id');
+        if (dbErr) return; // Tabel mungkin belum ada
+        
+        const dbIds = new Set(dbNotifs.map((n: any) => n.id));
+        const newNotifs = pengumumans.filter((p: any) => !dbIds.has(p.id));
+        
+        if (newNotifs.length > 0) {
+          const insertPayload = newNotifs.map((p: any) => ({
+            id: p.id,
+            judul: p.judul,
+            pesan: p.pesan,
+            tanggal: p.tanggal,
+            dibaca: false
+          }));
+          await supabase.from('notifikasi').insert(insertPayload);
+        }
+        
+        // Auto-delete lebih dari 6 bulan
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        await supabase.from('notifikasi').delete().lt('created_at', sixMonthsAgo.toISOString());
+
+        // Hitung unread
+        const { count } = await supabase
+          .from('notifikasi')
+          .select('*', { count: 'exact', head: true })
+          .eq('dibaca', false);
+          
+        setUnreadCount(count || 0);
+      } catch (err) {
+        console.error('Gagal sync notifikasi:', err);
+      }
+    };
+
+    if (user && !isDemoMode) {
+      syncNotifikasi();
+    }
+  }, [user]);
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -179,6 +227,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 DEMO MODE
               </span>
             )}
+            
+            <Link href="/admin/notifikasi" className="relative p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors mr-2 sm:mr-4">
+              <Bell size={22} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
+              )}
+            </Link>
+
             <div className="hidden sm:flex flex-col items-end mr-2">
               <span className="text-sm font-bold text-slate-800">{user?.nama || 'Administrator'}</span>
               <span className="text-xs font-semibold text-emerald-500 flex items-center gap-1">
