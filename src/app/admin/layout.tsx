@@ -45,12 +45,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Pantau Ujian', path: '/admin/pantau', icon: MonitorPlay },
     { name: 'Kelola Siswa & Kelas', path: '/admin/siswa', icon: Users },
     { name: 'Kelola Paket', path: '/admin/paket', icon: Package },
-    { name: 'Bank Soal', path: '/admin/bank-soal', icon: Archive },
-    { name: 'Kelola Soal', path: '/admin/soal', icon: FileText },
+    { name: 'Bank Soal', path: '/admin/soal', icon: Archive },
     { name: 'Tambah Soal', path: '/admin/tambah-soal', icon: PlusCircle },
-    { name: 'Pantau Ujian', path: '/admin/pantau', icon: MonitorPlay },
     { name: 'Hasil Ujian', path: '/admin/hasil', icon: Trophy },
     { name: 'Analisis Soal', path: '/admin/analisis', icon: PieChart },
     { name: 'Pengaturan', path: '/admin/pengaturan', icon: Settings },
