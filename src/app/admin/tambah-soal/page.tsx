@@ -159,11 +159,26 @@ export default function TambahSoalPage() {
           };
         });
 
-        const { error } = await supabase.from('soal').insert(payloadRows);
+        const soalPayloads = payloadRows.map((row: any) => {
+          const { paket_id, ...rest } = row;
+          return rest;
+        });
+
+        const { data: insertedSoal, error } = await supabase.from('soal').insert(soalPayloads).select();
+        
         if (error) {
           alert('Gagal mengunggah soal: ' + error.message);
-        } else {
-          alert(`${payloadRows.length} Soal berhasil diunggah dari Excel!`);
+        } else if (insertedSoal) {
+          const paketSoalPayloads = insertedSoal.map(s => ({
+            paket_id: selectedPaket,
+            soal_id: s.id
+          }));
+          const { error: relError } = await supabase.from('paket_soal').insert(paketSoalPayloads);
+          if (relError) {
+             alert('Gagal menghubungkan soal ke paket: ' + relError.message);
+          } else {
+             alert(`${payloadRows.length} Soal berhasil diunggah dari Excel!`);
+          }
         }
       } catch (err: any) {
         alert('Gagal membaca Excel: ' + err.message);
@@ -256,7 +271,6 @@ export default function TambahSoalPage() {
     }
 
     const payload: any = {
-      paket_id: selectedPaket,
       tipe: tipe,
       pertanyaan: pertanyaan,
       skor_maks: skor,
@@ -290,17 +304,26 @@ export default function TambahSoalPage() {
       payload.kunci = JSON.stringify(kunciMap);
     }
 
-    const { error } = await supabase.from('soal').insert(payload);
+    const { data: insertedSoal, error } = await supabase.from('soal').insert(payload).select().single();
     
     if (error) {
       alert('Gagal menyimpan soal: ' + error.message);
-    } else {
-      alert('Soal berhasil disimpan!');
-      // Reset form
-      setPertanyaan(''); setKunci('');
-      setOpsi({ A: '', B: '', C: '', D: '', E: '' });
-      setJodohkanPairs([{ id: Math.random().toString(36).substring(7), premis: '', respons: '' }]);
-      setJodohkanPengecoh([]);
+    } else if (insertedSoal) {
+      const { error: relError } = await supabase.from('paket_soal').insert({
+        paket_id: selectedPaket,
+        soal_id: insertedSoal.id
+      });
+      
+      if (relError) {
+        alert('Soal tersimpan di bank soal, tapi gagal dihubungkan ke paket: ' + relError.message);
+      } else {
+        alert('Soal berhasil disimpan!');
+        // Reset form
+        setPertanyaan(''); setKunci('');
+        setOpsi({ A: '', B: '', C: '', D: '', E: '' });
+        setJodohkanPairs([{ id: Math.random().toString(36).substring(7), premis: '', respons: '' }]);
+        setJodohkanPengecoh([]);
+      }
     }
   };
 

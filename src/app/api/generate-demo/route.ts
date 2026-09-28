@@ -54,7 +54,6 @@ export async function POST() {
     // 3. Create 5 Soal for the Paket
     const soalData = [
       {
-        paket_id: paket.id,
         tipe: 'PG',
         pertanyaan: 'Manakah di bawah ini yang merupakan ibu kota Indonesia?',
         opsi_a: 'Surabaya',
@@ -66,7 +65,6 @@ export async function POST() {
         skor_maks: 20
       },
       {
-        paket_id: paket.id,
         tipe: 'PG Kompleks',
         pertanyaan: 'Pilihlah lebih dari satu hewan mamalia yang hidup di air:',
         opsi_a: 'Paus',
@@ -78,21 +76,18 @@ export async function POST() {
         skor_maks: 20
       },
       {
-        paket_id: paket.id,
         tipe: 'Isian',
         pertanyaan: 'Siapakah presiden pertama Republik Indonesia?',
         kunci: 'Soekarno',
         skor_maks: 20
       },
       {
-        paket_id: paket.id,
         tipe: 'Essay',
         pertanyaan: 'Jelaskan bagaimana proses terjadinya hujan secara singkat!',
         kunci: '',
         skor_maks: 20
       },
       {
-        paket_id: paket.id,
         tipe: 'Menjodohkan',
         pertanyaan: 'Pasangkan negara dengan ibu kotanya yang tepat!',
         opsi_a: 'Indonesia|Jakarta',
@@ -103,8 +98,17 @@ export async function POST() {
       }
     ];
 
-    const { error: soalError } = await supabase.from('soal').insert(soalData);
+    const { data: insertedSoal, error: soalError } = await supabase.from('soal').insert(soalData).select();
     if (soalError) throw new Error(`Gagal membuat soal: ${soalError.message}`);
+
+    if (insertedSoal) {
+      const paketSoalData = insertedSoal.map(s => ({
+        paket_id: paket.id,
+        soal_id: s.id
+      }));
+      const { error: relError } = await supabase.from('paket_soal').insert(paketSoalData);
+      if (relError) throw new Error(`Gagal menghubungkan soal ke paket: ${relError.message}`);
+    }
 
     // 4. Create Admin Demo Account
     const adminUsername = `demo_admin_${demoId}`;

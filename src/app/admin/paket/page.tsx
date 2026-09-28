@@ -84,7 +84,7 @@ export default function KelolaPaketPage() {
       alert('Akun Demo tidak bisa menghapus paket ujian.');
       return;
     }
-    if (!confirm('Yakin hapus paket ini? Semua soal di dalamnya akan terhapus!')) return;
+    if (!confirm('Yakin hapus paket ujian ini? (Soal akan tetap aman di Bank Soal)')) return;
     await supabase.from('paket').delete().eq('id', id);
     fetchPaket();
   };
@@ -92,8 +92,8 @@ export default function KelolaPaketPage() {
   const openPratinjau = async (p: any) => {
     setPreviewPaket(p);
     setIsPreviewLoading(true);
-    const { data } = await supabase.from('soal').select('*').eq('paket_id', p.id);
-    setPreviewSoal(data || []);
+    const { data } = await supabase.from('paket_soal').select('soal(*)').eq('paket_id', p.id);
+    setPreviewSoal(data ? data.map((r: any) => r.soal) : []);
     setIsPreviewLoading(false);
   };
 

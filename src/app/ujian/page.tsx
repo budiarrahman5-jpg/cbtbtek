@@ -240,8 +240,8 @@ export default function UjianPage() {
   }, [router]);
 
   const fetchSoal = async (paketId: string) => {
-    const { data } = await supabase.from('soal').select('*').eq('paket_id', paketId);
-    if (data) setSoalList(data);
+    const { data } = await supabase.from('paket_soal').select('soal(*)').eq('paket_id', paketId);
+    if (data) setSoalList(data.map((r: any) => r.soal));
   };
 
   useEffect(() => {

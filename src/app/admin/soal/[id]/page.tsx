@@ -64,7 +64,10 @@ export default function EditSoalPage() {
   const fetchSoalData = async (id: string) => {
     const { data } = await supabase.from('soal').select('*').eq('id', id).single();
     if (data) {
-      setSelectedPaket(data.paket_id);
+      const { data: relData } = await supabase.from('paket_soal').select('paket_id').eq('soal_id', id).limit(1);
+      if (relData && relData.length > 0) {
+        setSelectedPaket(relData[0].paket_id);
+      }
       setTipe(data.tipe);
       setPertanyaan(data.pertanyaan);
       setSkor(data.skor_maks);
@@ -190,7 +193,6 @@ export default function EditSoalPage() {
     }
 
     const payload: any = {
-      paket_id: selectedPaket,
       tipe: tipe,
       pertanyaan: pertanyaan,
       skor_maks: skor,
@@ -229,6 +231,10 @@ export default function EditSoalPage() {
     if (error) {
       alert('Gagal memperbarui soal: ' + error.message);
     } else {
+      // Perbarui relasi paket (hapus yang lama, ganti yang baru sesuai pilihan)
+      await supabase.from('paket_soal').delete().eq('soal_id', params.id);
+      await supabase.from('paket_soal').insert({ paket_id: selectedPaket, soal_id: params.id });
+
       alert('Soal berhasil diperbarui!');
       router.push('/admin/soal');
     }

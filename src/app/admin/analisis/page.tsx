@@ -32,11 +32,12 @@ export default function AnalisisSoalPage() {
     setIsLoading(true);
     
     // 1. Ambil daftar soal untuk header tabel
-    let { data: dataSoal } = await supabase
-      .from('soal')
-      .select('id, kunci, tipe, paket(nama_paket)')
-      .eq('paket_id', selectedPaket)
-      .order('id', { ascending: true }); // Pastikan urutannya konsisten
+    let { data: relData } = await supabase
+      .from('paket_soal')
+      .select('soal(id, kunci, tipe)')
+      .eq('paket_id', selectedPaket);
+      
+    let dataSoal = relData ? relData.map((r: any) => r.soal).sort((a: any, b: any) => a.id.localeCompare(b.id)) : [];
       
     dataSoal = filterDemoData(dataSoal, 'soal');
     if (dataSoal) setSoalList(dataSoal);

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { List, Edit, Trash2 } from 'lucide-react';
+import { List, Edit, Trash2, Plus, Copy } from 'lucide-react';
 
 export default function KelolaSoalPage() {
   const [soal, setSoal] = useState<any[]>([]);
@@ -14,6 +14,7 @@ export default function KelolaSoalPage() {
   // Fitur Edit Skor Massal
   const [skorMassal, setSkorMassal] = useState('');
   const [selectedSoal, setSelectedSoal] = useState<string[]>([]);
+  const [targetPaketId, setTargetPaketId] = useState('');
 
   useEffect(() => {
     fetchPaket();
@@ -28,15 +29,24 @@ export default function KelolaSoalPage() {
 
   const fetchSoal = async () => {
     setIsLoading(true);
-    let query = supabase.from('soal').select('*, paket(nama_paket)');
     
     if (selectedPaket !== 'ALL') {
-      query = query.eq('paket_id', selectedPaket);
+      const { data: relData } = await supabase.from('paket_soal').select('soal_id').eq('paket_id', selectedPaket);
+      if (!relData || relData.length === 0) {
+        setSoal([]);
+        setIsLoading(false);
+        return;
+      }
+      const soalIds = relData.map(r => r.soal_id);
+      let { data } = await supabase.from('soal').select('*, paket_soal(paket(nama_paket))').in('id', soalIds);
+      data = filterDemoData(data, 'soal');
+      if (data) setSoal(data);
+    } else {
+      let { data } = await supabase.from('soal').select('*, paket_soal(paket(nama_paket))');
+      data = filterDemoData(data, 'soal');
+      if (data) setSoal(data);
     }
     
-    let { data } = await query;
-    data = filterDemoData(data, 'soal');
-    if (data) setSoal(data);
     setIsLoading(false);
   };
 
@@ -81,6 +91,34 @@ export default function KelolaSoalPage() {
     }
   };
 
+  const tambahkanKePaket = async () => {
+    if (selectedSoal.length === 0) {
+      alert('Pilih minimal satu soal dengan mencentang kotak di tabel!');
+      return;
+    }
+    if (!targetPaketId) {
+      alert('Pilih paket tujuan terlebih dahulu!');
+      return;
+    }
+
+    const payload = selectedSoal.map(id => ({
+      paket_id: targetPaketId,
+      soal_id: id
+    }));
+
+    // upsert untuk menghindari error duplicate key jika soal sudah ada di paket tersebut
+    const { error } = await supabase.from('paket_soal').upsert(payload, { onConflict: 'paket_id,soal_id' });
+
+    if (error) {
+      alert('Gagal menambahkan soal ke paket: ' + error.message);
+    } else {
+      alert(`${selectedSoal.length} soal berhasil ditambahkan ke paket!`);
+      setSelectedSoal([]);
+      setTargetPaketId('');
+      fetchSoal();
+    }
+  };
+
   const hapusSoal = async (id: string) => {
     if (!confirm('Hapus soal ini permanen?')) return;
     await supabase.from('soal').delete().eq('id', id);
@@ -113,8 +151,26 @@ export default function KelolaSoalPage() {
           <button 
             onClick={updateSkorMassal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded font-bold flex items-center gap-2 transition"
+            title="Update skor maksimal soal yang dipilih"
           >
-            <Edit size={16} /> Update Skor Terpilih
+            <Edit size={16} /> Skor
+          </button>
+          
+          <div className="h-6 w-px bg-gray-300 mx-2 hidden md:block"></div>
+          
+          <select 
+            value={targetPaketId} onChange={e=>setTargetPaketId(e.target.value)}
+            className="flex-1 md:flex-none border p-2 rounded bg-emerald-50 text-emerald-800 border-emerald-200 font-bold outline-none focus:ring-2 focus:ring-emerald-500 max-w-[150px] truncate"
+          >
+            <option value="">- Ke Paket -</option>
+            {paketList.map(p => <option key={p.id} value={p.id}>{p.nama_paket}</option>)}
+          </select>
+          <button 
+            onClick={tambahkanKePaket}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded font-bold flex items-center gap-2 transition"
+            title="Tambahkan soal yang dipilih ke paket tujuan"
+          >
+            <Plus size={16} /> Tambahkan
           </button>
         </div>
       </div>
@@ -155,7 +211,7 @@ export default function KelolaSoalPage() {
                         className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                     </td>
-                    <td className="p-3 text-gray-600 font-semibold">{s.paket?.nama_paket || '-'}</td>
+                    <td className="p-3 text-gray-600 font-semibold">{s.paket_soal && s.paket_soal.length > 0 ? s.paket_soal.map((ps: any) => ps.paket?.nama_paket).filter(Boolean).join(', ') : '-'}</td>
                     <td className="p-3 font-bold text-blue-800"><span className="bg-blue-100 px-2 py-1 rounded">{s.tipe}</span></td>
                     <td className="p-3 text-gray-800">
                       <div className="line-clamp-2 max-w-md" dangerouslySetInnerHTML={{ __html: s.pertanyaan }} />

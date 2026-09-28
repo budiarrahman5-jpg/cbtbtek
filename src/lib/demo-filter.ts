@@ -20,7 +20,12 @@ export function filterDemoData(data: any[] | null, tableName: string) {
         return data.filter(item => item.nama_paket?.includes(demoId) || item.paket?.nama_paket?.includes(demoId));
       }
       if (tableName === 'soal') {
-        return data.filter(item => item.paket?.nama_paket?.includes(demoId));
+        return data.filter(item => {
+           if (item.paket_soal && item.paket_soal.length > 0) {
+             return item.paket_soal.some((ps: any) => ps.paket?.nama_paket?.includes(demoId));
+           }
+           return false;
+        });
       }
       if (tableName === 'hasil') {
         return data.filter(item => item.users?.username?.includes(demoId));
@@ -37,7 +42,12 @@ export function filterDemoData(data: any[] | null, tableName: string) {
         return data.filter(item => !item.nama_paket?.startsWith('Paket Ujian Demo') && !item.paket?.nama_paket?.startsWith('Paket Ujian Demo'));
       }
       if (tableName === 'soal') {
-        return data.filter(item => !item.paket?.nama_paket?.startsWith('Paket Ujian Demo'));
+        return data.filter(item => {
+           if (item.paket_soal && item.paket_soal.length > 0) {
+             return !item.paket_soal.some((ps: any) => ps.paket?.nama_paket?.startsWith('Paket Ujian Demo'));
+           }
+           return true;
+        });
       }
       if (tableName === 'hasil') {
         return data.filter(item => !item.users?.username?.startsWith('demo_'));
