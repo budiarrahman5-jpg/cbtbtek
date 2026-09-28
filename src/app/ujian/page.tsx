@@ -219,6 +219,7 @@ export default function UjianPage() {
   const [ragu, setRagu] = useState<Record<string, boolean>>({});
   const [sisaWaktu, setSisaWaktu] = useState(3600);
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [cheatCount, setCheatCount] = useState(0);
   
   const router = useRouter();
 
@@ -237,6 +238,12 @@ export default function UjianPage() {
     setUser(u);
     setPaket(p);
     
+    const cheatKey = `cbt_cheat_${u.id}_${p.id}`;
+    const savedCheat = localStorage.getItem(cheatKey);
+    if (savedCheat) {
+      setCheatCount(parseInt(savedCheat, 10));
+    }
+    
     const timerKey = `cbt_timer_${u.id}_${p.id}`;
     const savedTimer = localStorage.getItem(timerKey);
     if (savedTimer) {
@@ -252,6 +259,32 @@ export default function UjianPage() {
     const { data } = await supabase.from('paket_soal').select('soal(*)').eq('paket_id', paketId);
     if (data) setSoalList(data.map((r: any) => r.soal));
   };
+
+  useEffect(() => {
+    if (!user || !paket) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setCheatCount(prev => {
+          const newCount = prev + 1;
+          localStorage.setItem(`cbt_cheat_${user.id}_${paket.id}`, newCount.toString());
+          return newCount;
+        });
+      } else {
+        alert('PERINGATAN! Anda terdeteksi keluar dari layar ujian atau membuka tab lain. Pelanggaran ini telah dicatat oleh sistem.');
+      }
+    };
+
+    const handleContextMenu = (e: Event) => e.preventDefault();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [user, paket]);
 
   useEffect(() => {
     if (!paket || !user) return;
@@ -353,13 +386,15 @@ export default function UjianPage() {
         waktu_sisa: sisaWaktu,
         detail_jawaban: jawaban,
         status_koreksi: 'Selesai',
-        skor_akhir: skorAkhir
+        skor_akhir: skorAkhir,
+        cheat_count: cheatCount
       });
 
       await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0' }).eq('id', user.id);
       
       localStorage.removeItem('cbt_paket');
       localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
+      localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
       alert('Ujian berhasil diselesaikan!');
       router.push('/');
     } catch (err) {
