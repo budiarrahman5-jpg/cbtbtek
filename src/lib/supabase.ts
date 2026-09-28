@@ -7,4 +7,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Variabel lingkungan Supabase tidak ditemukan. Pastikan Anda telah mengonfigurasi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY di file .env.local');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder'
+);
