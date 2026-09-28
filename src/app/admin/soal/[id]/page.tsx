@@ -101,6 +101,11 @@ export default function EditSoalPage() {
   };
 
   const fetchPaket = async () => {
+    let { data } = await supabase.from('paket').select('*').neq('status', 'Diarsipkan');
+    data = filterDemoData(data, 'paket');
+    if (data) setPaketList(data);
+  };
+
   const imageHandler = function(this: any) {
     const input = document.createElement('input');
     input.setAttribute('type', 'file');
