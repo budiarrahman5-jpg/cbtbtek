@@ -162,9 +162,14 @@ export default function KelolaSoalPage() {
                     </td>
                     <td className="p-3 text-center font-black text-gray-700">{s.skor_maks}</td>
                     <td className="p-3 text-center">
-                      <button onClick={() => hapusSoal(s.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-2 rounded">
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <a href={`/admin/soal/${s.id}`} className="text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 p-2 rounded transition-colors" title="Edit Soal">
+                          <Edit size={16} />
+                        </a>
+                        <button onClick={() => hapusSoal(s.id)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors" title="Hapus Soal">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

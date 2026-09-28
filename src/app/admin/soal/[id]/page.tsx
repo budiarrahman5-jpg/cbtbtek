@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Download, Upload, FileSpreadsheet } from 'lucide-react';
+import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Edit } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import * as XLSX from 'xlsx';
+import { useRouter, useParams } from 'next/navigation';
 import 'react-quill-new/dist/quill.snow.css';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
@@ -32,7 +32,9 @@ const ReactQuill = dynamic(async () => {
   return RQ;
 }, { ssr: false });
 
-export default function TambahSoalPage() {
+export default function EditSoalPage() {
+  const router = useRouter();
+  const params = useParams();
   const [paketList, setPaketList] = useState<any[]>([]);
   const [selectedPaket, setSelectedPaket] = useState('');
   const [tipe, setTipe] = useState('PG');
@@ -53,130 +55,52 @@ export default function TambahSoalPage() {
     fetchPaket();
   }, []);
 
-  const fetchPaket = async () => {
-    let { data } = await supabase.from('paket').select('*').neq('status', 'Diarsipkan');
-    data = filterDemoData(data, 'paket');
-    if (data) setPaketList(data);
-  };
-
-  // --- FITUR EXCEL ---
-  const downloadTemplateExcel = () => {
-    const data = [
-      {
-        Tipe: 'PG',
-        Pertanyaan: 'Apa ibu kota Indonesia?',
-        Opsi_A: 'Jakarta',
-        Opsi_B: 'Bandung',
-        Opsi_C: 'Surabaya',
-        Opsi_D: 'Medan',
-        Opsi_E: '',
-        Kunci: 'A',
-        Skor: 10
-      },
-      {
-        Tipe: 'Isian',
-        Pertanyaan: 'Siapakah presiden pertama RI?',
-        Opsi_A: '',
-        Opsi_B: '',
-        Opsi_C: '',
-        Opsi_D: '',
-        Opsi_E: '',
-        Kunci: 'Soekarno',
-        Skor: 15
-      },
-      {
-        Tipe: 'Essay',
-        Pertanyaan: 'Jelaskan pengertian dari fotosintesis!',
-        Opsi_A: '',
-        Opsi_B: '',
-        Opsi_C: '',
-        Opsi_D: '',
-        Opsi_E: '',
-        Kunci: '-',
-        Skor: 20
-      }
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Sesuaikan lebar kolom
-    const wscols = [
-      {wch: 15}, {wch: 40}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 15}, {wch: 10}
-    ];
-    ws['!cols'] = wscols;
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template_Soal");
-    XLSX.writeFile(wb, "Template_Soal_CBT.xlsx");
-  };
-
-  const handleUploadExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!selectedPaket) {
-      alert('Pilih Paket Soal terlebih dahulu sebelum mengunggah Excel!');
-      e.target.value = '';
-      return;
+  useEffect(() => {
+    if (params.id) {
+      fetchSoalData(params.id as string);
     }
+  }, [params.id]);
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-
-        if (data.length === 0) {
-          alert('Excel kosong!');
-          return;
-        }
-
-        const confirmUpload = confirm(`Ditemukan ${data.length} baris soal. Proses unggah ke database sekarang?`);
-        if (!confirmUpload) return;
-
-        const payloadRows = data.map((row: any) => {
-          let t = String(row.Tipe || 'PG').trim();
-          // Normalisasi tipe soal
-          if (t.toLowerCase().includes('isian')) t = 'Isian';
-          else if (t.toLowerCase().includes('essay') || t.toLowerCase().includes('esai')) t = 'Essay';
-          else if (t.toLowerCase().includes('kompleks')) t = 'PG Kompleks';
-          else t = 'PG';
-
-          return {
-            paket_id: selectedPaket,
-            tipe: t,
-            pertanyaan: String(row.Pertanyaan || ''),
-            opsi_a: String(row.Opsi_A || ''),
-            opsi_b: String(row.Opsi_B || ''),
-            opsi_c: String(row.Opsi_C || ''),
-            opsi_d: String(row.Opsi_D || ''),
-            opsi_e: String(row.Opsi_E || ''),
-            kunci: String(row.Kunci || ''),
-            skor_maks: Number(row.Skor) || 10
-          };
-        });
-
-        const { error } = await supabase.from('soal').insert(payloadRows);
-        if (error) {
-          alert('Gagal mengunggah soal: ' + error.message);
-        } else {
-          alert(`${payloadRows.length} Soal berhasil diunggah dari Excel!`);
-        }
-      } catch (err: any) {
-        alert('Gagal membaca Excel: ' + err.message);
-      }
+  const fetchSoalData = async (id: string) => {
+    const { data } = await supabase.from('soal').select('*').eq('id', id).single();
+    if (data) {
+      setSelectedPaket(data.paket_id);
+      setTipe(data.tipe);
+      setPertanyaan(data.pertanyaan);
+      setSkor(data.skor_maks);
       
-      // Reset input file
-      e.target.value = '';
-    };
-    reader.readAsBinaryString(file);
+      if (data.tipe === 'PG' || data.tipe === 'PG Kompleks') {
+        setOpsi({ A: data.opsi_a, B: data.opsi_b, C: data.opsi_c, D: data.opsi_d, E: data.opsi_e });
+        setKunci(data.kunci);
+      } else if (data.tipe === 'Essay' || data.tipe === 'Isian') {
+        setKunci(data.kunci);
+      } else if (data.tipe === 'Menjodohkan') {
+        try {
+          const pList = JSON.parse(data.opsi_a || '[]');
+          const rList = JSON.parse(data.opsi_b || '[]');
+          const kList = JSON.parse(data.kunci || '[]');
+          
+          if (pList.length > 0) {
+            const newPairs = pList.map((p: any) => {
+              const k = kList.find((x: any) => x.premisId === p.id);
+              const r = rList.find((x: any) => x.id === k?.responsId);
+              return { id: p.id, premis: p.text, respons: r?.text || '' };
+            });
+            setJodohkanPairs(newPairs);
+            
+            // Pengecoh: find respons items that are not in kList
+            const pengecoh = rList.filter((r: any) => !kList.some((k: any) => k.responsId === r.id));
+            setJodohkanPengecoh(pengecoh);
+          }
+        } catch(e) {
+          // Fallback if legacy format
+          console.error("Gagal parse opsi menjodohkan:", e);
+        }
+      }
+    }
   };
-  // -------------------------
 
-  // Image Handler kustom untuk kompresi WebP Base64
+  const fetchPaket = async () => {
   const imageHandler = function(this: any) {
     const input = document.createElement('input');
     input.setAttribute('type', 'file');
@@ -244,7 +168,7 @@ export default function TambahSoalPage() {
     'link', 'image', 'video', 'formula'
   ];
 
-  const simpanSoal = async () => {
+  const updateSoal = async () => {
     if (!selectedPaket || !pertanyaan) {
       alert('Isi Paket Soal dan Pertanyaan terlebih dahulu!');
       return;
@@ -290,17 +214,13 @@ export default function TambahSoalPage() {
       payload.kunci = JSON.stringify(kunciMap);
     }
 
-    const { error } = await supabase.from('soal').insert(payload);
+    const { error } = await supabase.from('soal').update(payload).eq('id', params.id);
     
     if (error) {
-      alert('Gagal menyimpan soal: ' + error.message);
+      alert('Gagal memperbarui soal: ' + error.message);
     } else {
-      alert('Soal berhasil disimpan!');
-      // Reset form
-      setPertanyaan(''); setKunci('');
-      setOpsi({ A: '', B: '', C: '', D: '', E: '' });
-      setJodohkanPairs([{ id: Math.random().toString(36).substring(7), premis: '', respons: '' }]);
-      setJodohkanPengecoh([]);
+      alert('Soal berhasil diperbarui!');
+      router.push('/admin/soal');
     }
   };
 
@@ -308,27 +228,8 @@ export default function TambahSoalPage() {
     <div className="bg-white p-6 md:p-8 rounded-lg shadow-sm border-t-4 border-indigo-600 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-2">
-          <PlusCircle className="text-indigo-600 w-8 h-8" />
-          <h2 className="text-2xl font-bold text-slate-800">Tambah Soal Canggih</h2>
-        </div>
-        
-        <div className="flex flex-wrap gap-2">
-          <button 
-            onClick={downloadTemplateExcel}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-bold transition-colors"
-          >
-            <Download size={16} /> Template Excel
-          </button>
-          
-          <label className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-sm font-bold transition-colors cursor-pointer">
-            <FileSpreadsheet size={16} /> Upload Excel
-            <input 
-              type="file" 
-              accept=".xlsx, .xls" 
-              className="hidden" 
-              onChange={handleUploadExcel} 
-            />
-          </label>
+          <Edit className="text-amber-500 w-8 h-8" />
+          <h2 className="text-2xl font-bold text-slate-800">Edit Soal</h2>
         </div>
       </div>
 
@@ -517,10 +418,10 @@ export default function TambahSoalPage() {
       </div>
 
       <button 
-        onClick={simpanSoal}
-        className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black py-4 rounded-xl shadow-xl shadow-indigo-600/30 text-lg flex justify-center items-center gap-2 transition-transform active:scale-95"
+        onClick={updateSoal}
+        className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black py-4 rounded-xl shadow-xl shadow-amber-500/30 text-lg flex justify-center items-center gap-2 transition-transform active:scale-95"
       >
-        <Save size={24} /> SIMPAN SOAL
+        <Save size={24} /> UPDATE SOAL
       </button>
       
       {/* KaTeX CSS Global untuk render */}
