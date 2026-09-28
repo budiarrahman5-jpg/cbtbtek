@@ -41,6 +41,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   };
 
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      // Auto logout after 30 minutes of inactivity
+      timeout = setTimeout(() => {
+        handleLogout();
+        alert('Anda telah logout otomatis karena tidak ada aktivitas selama 30 menit.');
+      }, 30 * 60 * 1000); 
+    };
+
+    resetTimer();
+
+    // Listen to user activity events
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+    window.addEventListener('scroll', resetTimer);
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      window.removeEventListener('scroll', resetTimer);
+    };
+  }, [user]);
+
   const isDemoMode = user?.username?.startsWith('demo_admin_');
 
   const navItems = [
@@ -48,7 +77,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Pantau Ujian', path: '/admin/pantau', icon: MonitorPlay },
     { name: 'Kelola Siswa & Kelas', path: '/admin/siswa', icon: Users },
     { name: 'Kelola Paket', path: '/admin/paket', icon: Package },
-    { name: 'Bank Soal', path: '/admin/soal', icon: Archive },
+    { name: 'Bank Soal', path: '/admin/bank-soal', icon: Archive },
+    { name: 'Kelola Soal', path: '/admin/soal', icon: FileText },
     { name: 'Tambah Soal', path: '/admin/tambah-soal', icon: PlusCircle },
     { name: 'Hasil Ujian', path: '/admin/hasil', icon: Trophy },
     { name: 'Analisis Soal', path: '/admin/analisis', icon: PieChart },

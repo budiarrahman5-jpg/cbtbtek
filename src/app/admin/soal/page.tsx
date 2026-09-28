@@ -135,7 +135,7 @@ export default function KelolaSoalPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200 gap-4">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Archive className="text-blue-600" /> Bank Soal
+          <List className="text-blue-600" /> Kelola Soal
         </h2>
         
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
