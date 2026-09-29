@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2 } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -220,8 +220,30 @@ export default function UjianPage() {
   const [sisaWaktu, setSisaWaktu] = useState(3600);
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [cheatCount, setCheatCount] = useState(0);
+
+  // Proteksi Layar & Kode Buka Blokir
+  const [proteksiLayar, setProteksiLayar] = useState('ON');
+  const [kodeBukaBlokir, setKodeBukaBlokir] = useState('BUKA123');
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
+  const [inputKodeBlokir, setInputKodeBlokir] = useState('');
+  const [blokirError, setBlokirError] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(true);
   
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      const { data } = await supabase.from('pengaturan').select('*');
+      if (data) {
+        const pl = data.find((d: any) => d.kunci === 'proteksi_layar');
+        if (pl) setProteksiLayar(pl.nilai);
+        const kb = data.find((d: any) => d.kunci === 'kode_buka_blokir');
+        if (kb) setKodeBukaBlokir(kb.nilai);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('cbt_user');
@@ -261,45 +283,107 @@ export default function UjianPage() {
     }
 
     fetchSoal(p.id);
+
+    // Coba aktifkan fullscreen
+    aktivasiFullscreen();
   }, [router]);
 
   const fetchSoal = async (paketId: string) => {
+    const { data: pengData } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'acak_soal').maybeSingle();
+    const isAcak = pengData?.nilai === 'ON';
+    
     const { data } = await supabase.from('paket_soal').select('soal(*)').eq('paket_id', paketId);
-    if (data) setSoalList(data.map((r: any) => r.soal));
+    if (data) {
+      let soalArr = data.map((r: any) => r.soal);
+      if (isAcak) {
+        soalArr = soalArr.sort(() => Math.random() - 0.5);
+      }
+      setSoalList(soalArr);
+    }
+  };
+
+  const aktivasiFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      }
+    } catch (e) {
+      setIsFullscreen(false);
+      console.log('Fullscreen error:', e);
+    }
+  };
+
+  const trgViolation = (alasan: string) => {
+    if (isBlocked) return;
+    setIsBlocked(true);
+    setBlockReason(alasan);
+    setInputKodeBlokir('');
+    setBlokirError('');
+
+    setCheatCount(prev => {
+      const newCount = prev + 1;
+      if (user && paket) {
+        localStorage.setItem(`cbt_cheat_${user.id}_${paket.id}`, newCount.toString());
+      }
+      return newCount;
+    });
   };
 
   useEffect(() => {
     if (!user || !paket) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setCheatCount(prev => {
-          const newCount = prev + 1;
-          localStorage.setItem(`cbt_cheat_${user.id}_${paket.id}`, newCount.toString());
-          return newCount;
-        });
-        
-        alert('PELANGGARAN! Anda terdeteksi keluar dari layar ujian atau berpindah aplikasi. Anda dikeluarkan dari ujian dan harus meminta izin pengawas untuk memasukkan token kembali.');
-        window.location.href = '/token';
+      if (document.hidden && proteksiLayar !== 'OFF') {
+        trgViolation('Terdeteksi keluar dari tab ujian atau berpindah aplikasi.');
+      }
+    };
+
+    const handleFullscreenChange = () => {
+      const inFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullscreen(inFs);
+      if (!inFs && proteksiLayar !== 'OFF') {
+        trgViolation('Terdeteksi keluar dari mode layar penuh (Fullscreen).');
       }
     };
 
     const handleContextMenu = (e: Event) => e.preventDefault();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [user, paket]);
+  }, [user, paket, proteksiLayar, isBlocked]);
+
+  const handleBukaBlokir = async () => {
+    const entered = inputKodeBlokir.trim().toUpperCase();
+    const target = (kodeBukaBlokir || 'BUKA123').trim().toUpperCase();
+
+    if (entered === target) {
+      setIsBlocked(false);
+      setBlokirError('');
+      setInputKodeBlokir('');
+      await aktivasiFullscreen();
+    } else {
+      setBlokirError('Kode buka blokir salah! Silakan minta kode yang valid kepada pengawas.');
+    }
+  };
 
   useEffect(() => {
     if (!paket || !user) return;
     const timerKey = `cbt_timer_${user.id}_${paket.id}`;
     
     const interval = setInterval(() => {
+      // Jeda hitungan waktu jika ujian sedang diblokir
+      if (isBlocked) return;
+
       setSisaWaktu((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
@@ -314,7 +398,7 @@ export default function UjianPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [paket, user]);
+  }, [paket, user, isBlocked]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -445,6 +529,20 @@ export default function UjianPage() {
     <div className="flex flex-col h-screen bg-slate-100 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       <style dangerouslySetInnerHTML={{__html: richTextGlobalStyles}} />
       
+      {/* Banner Peringatan Fullscreen */}
+      {!isFullscreen && proteksiLayar !== 'OFF' && (
+        <div className="bg-amber-500 text-white px-4 py-2 text-center text-xs md:text-sm font-bold flex items-center justify-center gap-3 z-30 shadow-md">
+          <ShieldAlert size={18} className="animate-bounce" />
+          <span>Ujian ini wajib dalam mode Layar Penuh (Fullscreen).</span>
+          <button 
+            onClick={aktivasiFullscreen} 
+            className="bg-white text-amber-900 px-3 py-1 rounded-full text-xs font-black shadow-sm hover:bg-amber-50 transition active:scale-95 flex items-center gap-1"
+          >
+            <Maximize2 size={14} /> Aktifkan Fullscreen
+          </button>
+        </div>
+      )}
+
       {/* Premium Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 p-3 md:p-4 shadow-sm flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -608,13 +706,21 @@ export default function UjianPage() {
               <span className="hidden sm:inline">Ragu-ragu</span>
             </button>
 
-            <button 
-              onClick={() => setIndexSoal(Math.min(soalList.length - 1, indexSoal + 1))}
-              disabled={indexSoal === soalList.length - 1}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
-            >
-              <span className="hidden sm:inline">Soal Berikutnya</span> <ChevronRight size={20} />
-            </button>
+            {indexSoal === soalList.length - 1 ? (
+              <button 
+                onClick={handleSelesai}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
+              >
+                <span className="hidden sm:inline">Selesai Ujian</span> <CheckCircle2 size={20} />
+              </button>
+            ) : (
+              <button 
+                onClick={() => setIndexSoal(Math.min(soalList.length - 1, indexSoal + 1))}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
+              >
+                <span className="hidden sm:inline">Soal Berikutnya</span> <ChevronRight size={20} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -681,6 +787,50 @@ export default function UjianPage() {
           </div>
         </div>
       </main>
+
+      {/* Modal Buka Blokir Pelanggaran */}
+      {isBlocked && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[999] flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full text-center shadow-2xl border-4 border-rose-500 animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 border-rose-200">
+              <Lock size={32} />
+            </div>
+            
+            <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">UJIAN DIHENTIKAN SEMENTARA</h2>
+            
+            <div className="text-xs md:text-sm font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 my-3">
+              {blockReason || 'Terdeteksi aktivitas yang melanggar aturan ujian.'}
+            </div>
+            
+            <p className="text-xs md:text-sm text-slate-600 font-medium mb-6 leading-relaxed">
+              Anda terdeteksi keluar dari mode layar penuh atau berpindah aplikasi/tab. Silakan panggil <b>Pengawas Ujian</b> untuk memasukkan kode verifikasi guna membuka kembali lembar ujian.
+            </p>
+            
+            <div className="space-y-3">
+              <input 
+                type="text" 
+                placeholder="KODE PENGAWAS" 
+                value={inputKodeBlokir} 
+                onChange={e => { setInputKodeBlokir(e.target.value); setBlokirError(''); }}
+                onKeyDown={e => { if (e.key === 'Enter') handleBukaBlokir(); }}
+                autoFocus
+                className="w-full text-center text-xl md:text-2xl font-black uppercase tracking-[0.25em] px-4 py-3.5 border-2 border-slate-300 rounded-2xl outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20 text-slate-800 placeholder:text-slate-300 placeholder:tracking-normal placeholder:font-bold placeholder:text-sm"
+              />
+              
+              {blokirError && (
+                <p className="text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg">{blokirError}</p>
+              )}
+              
+              <button 
+                onClick={handleBukaBlokir} 
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-rose-600/30 transition-all active:scale-[0.98] text-sm tracking-wider"
+              >
+                BUKA BLOKIR SEKARANG
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

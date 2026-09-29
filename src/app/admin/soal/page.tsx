@@ -9,6 +9,7 @@ export default function KelolaSoalPage() {
   const [soal, setSoal] = useState<any[]>([]);
   const [paketList, setPaketList] = useState<any[]>([]);
   const [selectedPaket, setSelectedPaket] = useState('ALL');
+  const [selectedTipe, setSelectedTipe] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
 
   // Fitur Edit Skor Massal
@@ -51,9 +52,11 @@ export default function KelolaSoalPage() {
     setIsLoading(false);
   };
 
+  const displayedSoal = selectedTipe === 'ALL' ? soal : soal.filter(s => s.tipe === selectedTipe);
+
   const toggleAllSoal = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedSoal(soal.map(s => s.id));
+      setSelectedSoal(displayedSoal.map(s => s.id));
     } else {
       setSelectedSoal([]);
     }
@@ -146,6 +149,18 @@ export default function KelolaSoalPage() {
             <option value="ALL">-- Semua Paket --</option>
             {paketList.map(p => <option key={p.id} value={p.id}>{p.nama_paket}</option>)}
           </select>
+
+          <select 
+            value={selectedTipe} onChange={e=>setSelectedTipe(e.target.value)}
+            className="flex-1 md:flex-none border p-2 rounded bg-gray-50 font-bold outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">-- Semua Tipe Soal --</option>
+            <option value="PG">Pilihan Ganda (PG)</option>
+            <option value="PG Kompleks">PG Kompleks</option>
+            <option value="Menjodohkan">Menjodohkan</option>
+            <option value="Isian">Isian Singkat</option>
+            <option value="Essay">Uraian / Essay</option>
+          </select>
           
           <div className="h-6 w-px bg-gray-300 mx-2 hidden md:block"></div>
           
@@ -190,7 +205,7 @@ export default function KelolaSoalPage() {
                   <input 
                     type="checkbox" 
                     onChange={toggleAllSoal}
-                    checked={soal.length > 0 && selectedSoal.length === soal.length}
+                    checked={displayedSoal.length > 0 && selectedSoal.length === displayedSoal.length}
                     className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
                 </th>
@@ -204,10 +219,10 @@ export default function KelolaSoalPage() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={6} className="p-8 text-center text-gray-500 font-bold">Memuat soal...</td></tr>
-              ) : soal.length === 0 ? (
+              ) : displayedSoal.length === 0 ? (
                 <tr><td colSpan={6} className="p-8 text-center text-gray-500">Tidak ada soal ditemukan.</td></tr>
               ) : (
-                soal.map(s => (
+                displayedSoal.map(s => (
                   <tr key={s.id} className="border-b hover:bg-blue-50">
                     <td className="p-3 text-center">
                       <input 

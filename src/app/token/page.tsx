@@ -86,6 +86,15 @@ export default function TokenPage() {
       localStorage.setItem('cbt_paket', JSON.stringify(paket));
       await supabase.from('log').insert({ user_id: user.id, aktivitas: `Mulai Ujian Paket: ${paket.nama_paket}` });
 
+      // Request Fullscreen
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (e) {
+        console.log('Gagal masuk ke mode fullscreen:', e);
+      }
+
       router.push('/ujian');
     } catch (error: any) {
       console.error('Error di handleMulaiUjian:', error);
