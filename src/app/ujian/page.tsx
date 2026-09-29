@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -229,6 +229,20 @@ export default function UjianPage() {
   const [inputKodeBlokir, setInputKodeBlokir] = useState('');
   const [blokirError, setBlokirError] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(true);
+
+  // Pengaturan Tampil Nilai & Dialog Penyelesaian
+  const [tampilNilai, setTampilNilai] = useState('ON');
+  const [warningIncomplete, setWarningIncomplete] = useState<{
+    isOpen: boolean;
+    belumDijawab: number[];
+    masihRagu: number[];
+  } | null>(null);
+  const [hasilSelesai, setHasilSelesai] = useState<{
+    isOpen: boolean;
+    skorAkhir: number;
+    waktuPakai: string;
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const router = useRouter();
 
@@ -240,6 +254,8 @@ export default function UjianPage() {
         if (pl) setProteksiLayar(pl.nilai);
         const kb = data.find((d: any) => d.kunci === 'kode_buka_blokir');
         if (kb) setKodeBukaBlokir(kb.nilai);
+        const tn = data.find((d: any) => d.kunci === 'tampil_nilai');
+        if (tn) setTampilNilai(tn.nilai);
       }
     };
     fetchConfig();
@@ -388,7 +404,7 @@ export default function UjianPage() {
         if (prev <= 1) {
           clearInterval(interval);
           localStorage.removeItem(timerKey);
-          handleSelesai();
+          handleSelesai(true);
           return 0;
         }
         const nextVal = prev - 1;
@@ -423,8 +439,55 @@ export default function UjianPage() {
     });
   };
 
-  const handleSelesai = async () => {
-    if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian? Anda tidak bisa mengulangi ujian ini lagi.')) return;
+  const checkJawabanLengkap = () => {
+    const belumDijawab: number[] = [];
+    const masihRagu: number[] = [];
+
+    soalList.forEach((soal, idx) => {
+      const no = idx + 1;
+      const jwb = jawaban[soal.id];
+      let terisi = false;
+
+      if (soal.tipe === 'Menjodohkan') {
+        terisi = Array.isArray(jwb) && jwb.length > 0;
+      } else if (soal.tipe === 'PG Kompleks') {
+        terisi = Array.isArray(jwb) && jwb.length > 0;
+      } else {
+        terisi = jwb !== undefined && jwb !== null && String(jwb).trim() !== '';
+      }
+
+      if (!terisi) {
+        belumDijawab.push(no);
+      } else if (ragu[soal.id]) {
+        masihRagu.push(no);
+      }
+    });
+
+    return {
+      isLengkap: belumDijawab.length === 0 && masihRagu.length === 0,
+      belumDijawab,
+      masihRagu
+    };
+  };
+
+  const handleSelesai = async (isAutoSubmit = false) => {
+    if (!isAutoSubmit) {
+      const status = checkJawabanLengkap();
+      if (!status.isLengkap) {
+        setWarningIncomplete({
+          isOpen: true,
+          belumDijawab: status.belumDijawab,
+          masihRagu: status.masihRagu
+        });
+        return;
+      }
+
+      if (!confirm('Apakah Anda yakin ingin menyelesaikan ujian? Seluruh soal telah dijawab. Nilai Anda akan segera diproses.')) {
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
     
     // --- Kalkulasi Skor ---
     let totalSkorBenar = 0;
@@ -478,7 +541,11 @@ export default function UjianPage() {
 
     // Skala 100
     const skorAkhir = totalSkorMaks > 0 ? Math.round((totalSkorBenar / totalSkorMaks) * 100) : 0;
-    // -----------------------
+    const durasiAwal = (paket.durasi_menit || 60) * 60;
+    const waktuDigunakan = Math.max(0, durasiAwal - sisaWaktu);
+    const mPakai = Math.floor(waktuDigunakan / 60);
+    const sPakai = waktuDigunakan % 60;
+    const formatWaktuPakai = `${mPakai} menit ${sPakai} detik`;
 
     try {
       await supabase.from('hasil').insert({
@@ -498,11 +565,26 @@ export default function UjianPage() {
       localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
       localStorage.removeItem(`cbt_jawaban_${user.id}_${paket.id}`);
       localStorage.removeItem(`cbt_ragu_${user.id}_${paket.id}`);
-      alert('Ujian berhasil diselesaikan!');
-      router.push('/');
+
+      // Buka Layar Hasil Selesai Ujian & Skor Beranimasi
+      setHasilSelesai({
+        isOpen: true,
+        skorAkhir,
+        waktuPakai: formatWaktuPakai
+      });
+
+      // Lepaskan mode fullscreen jika aktif
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      } catch (e) {}
+
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan saat menyimpan ujian.');
+      alert('Terjadi kesalahan saat menyimpan ujian. Pastikan koneksi internet stabil.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -708,10 +790,11 @@ export default function UjianPage() {
 
             {indexSoal === soalList.length - 1 ? (
               <button 
-                onClick={handleSelesai}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
+                onClick={() => handleSelesai(false)}
+                disabled={isSubmitting}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95 disabled:opacity-50"
               >
-                <span className="hidden sm:inline">Selesai Ujian</span> <CheckCircle2 size={20} />
+                <span className="hidden sm:inline">{isSubmitting ? 'Menyimpan...' : 'Selesai Ujian'}</span> <CheckCircle2 size={20} />
               </button>
             ) : (
               <button 
@@ -774,15 +857,16 @@ export default function UjianPage() {
 
           <div className="pt-5 border-t border-slate-100 mt-auto space-y-4">
             <button 
-              onClick={handleSelesai}
+              onClick={() => handleSelesai(false)}
+              disabled={isSubmitting}
               className={clsx(
-                "w-full py-4 rounded-xl font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98]",
+                "w-full py-4 rounded-xl font-bold text-sm tracking-wider flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50",
                 Object.keys(jawaban).length === soalList.length && !Object.values(ragu).some(Boolean)
                   ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30" 
                   : "bg-slate-800 hover:bg-slate-900 text-white shadow-lg shadow-slate-800/20"
               )}
             >
-              <CheckCircle2 size={18} /> SELESAI UJIAN
+              <CheckCircle2 size={18} /> {isSubmitting ? 'MENYIMPAN...' : 'SELESAI UJIAN'}
             </button>
           </div>
         </div>
@@ -828,6 +912,198 @@ export default function UjianPage() {
                 BUKA BLOKIR SEKARANG
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Peringatan Jawaban Belum Lengkap */}
+      {warningIncomplete?.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in select-none">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full text-center shadow-2xl border border-amber-200">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-200 animate-bounce">
+              <AlertTriangle size={32} />
+            </div>
+
+            <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">UJIAN BELUM DAPAT DISELESAIKAN!</h2>
+            <p className="text-xs md:text-sm text-slate-500 font-medium mt-1 mb-4 leading-relaxed">
+              Sesuai aturan, Anda <b>wajib menjawab semua soal</b> dan memastikan tidak ada soal yang masih ditandai ragu-ragu sebelum dapat mengakhiri ujian.
+            </p>
+
+            <div className="space-y-3 mb-6 text-left">
+              {warningIncomplete.belumDijawab.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 text-rose-800 font-bold text-xs uppercase tracking-wider mb-1.5">
+                    <AlertCircle size={16} className="text-rose-600 flex-shrink-0" />
+                    <span>{warningIncomplete.belumDijawab.length} Soal Belum Dijawab:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2 max-h-36 overflow-y-auto pr-1">
+                    {warningIncomplete.belumDijawab.map(no => (
+                      <button
+                        key={no}
+                        onClick={() => {
+                          setIndexSoal(no - 1);
+                          setWarningIncomplete(null);
+                        }}
+                        className="bg-white border border-rose-300 hover:bg-rose-600 hover:text-white text-rose-700 font-black text-xs px-2.5 py-1 rounded-lg transition shadow-sm active:scale-95"
+                        title={`Klik untuk langsung ke soal nomor ${no}`}
+                      >
+                        No. {no}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {warningIncomplete.masihRagu.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold text-xs uppercase tracking-wider mb-1.5">
+                    <HelpCircle size={16} className="text-amber-600 flex-shrink-0" />
+                    <span>{warningIncomplete.masihRagu.length} Soal Masih Bertanda Ragu-Ragu:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2 max-h-36 overflow-y-auto pr-1">
+                    {warningIncomplete.masihRagu.map(no => (
+                      <button
+                        key={no}
+                        onClick={() => {
+                          setIndexSoal(no - 1);
+                          setWarningIncomplete(null);
+                        }}
+                        className="bg-white border border-amber-300 hover:bg-amber-500 hover:text-white text-amber-800 font-black text-xs px-2.5 py-1 rounded-lg transition shadow-sm active:scale-95"
+                        title={`Klik untuk memeriksa soal nomor ${no}`}
+                      >
+                        No. {no}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                const targetNo = warningIncomplete.belumDijawab[0] || warningIncomplete.masihRagu[0] || 1;
+                setIndexSoal(targetNo - 1);
+                setWarningIncomplete(null);
+              }}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-600/30 transition active:scale-95 flex items-center justify-center gap-2"
+            >
+              <span>Lanjutkan Mengerjakan</span>
+              <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Layar Penyelesaian Ujian & Skor (Hasil Akhir) */}
+      {hasilSelesai?.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl z-[1000] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-500 select-none">
+          {/* Efek Latar Belakang Beranimasi */}
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/30 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse delay-1000 pointer-events-none"></div>
+
+          <div className="relative bg-white/95 backdrop-blur-md rounded-3xl p-6 md:p-10 max-w-xl w-full text-center shadow-2xl border border-slate-100 my-8">
+            
+            {tampilNilai === 'ON' ? (
+              <>
+                {/* Tampilan Dengan Nilai (ON) */}
+                <div className="relative mx-auto w-24 h-24 mb-6">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-full blur-xl opacity-70 animate-pulse"></div>
+                  <div className="relative w-24 h-24 bg-gradient-to-tr from-amber-500 to-yellow-400 text-white rounded-full flex items-center justify-center shadow-xl shadow-amber-500/40 border-4 border-white">
+                    <Trophy size={48} className="animate-bounce" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 bg-indigo-600 text-white p-1.5 rounded-full shadow">
+                    <Sparkles size={16} />
+                  </div>
+                </div>
+
+                <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
+                  SELAMAT, UJIAN SELESAI!
+                </h1>
+                <p className="text-xs md:text-sm text-slate-500 font-medium mt-1 mb-6">
+                  Seluruh lembar jawaban Anda telah berhasil disimpan dan dinilai oleh sistem CBT B-TEK.
+                </p>
+
+                {/* Kartu Skor Besar Bergradasi */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white rounded-3xl p-6 md:p-8 shadow-xl shadow-indigo-600/30 mb-6">
+                  <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                  
+                  <span className="text-xs font-black uppercase tracking-[0.25em] text-indigo-200 block mb-2">
+                    SKOR AKHIR ANDA
+                  </span>
+                  
+                  <div className="flex items-baseline justify-center gap-2">
+                    <span className="text-6xl md:text-7xl font-black tracking-tight drop-shadow-md">
+                      {hasilSelesai.skorAkhir}
+                    </span>
+                    <span className="text-xl md:text-2xl text-indigo-200 font-bold">/ 100</span>
+                  </div>
+
+                  <div className="mt-4 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold tracking-wide">
+                    <Award size={14} className="text-yellow-300" />
+                    <span>
+                      {hasilSelesai.skorAkhir >= 85 ? 'Sangat Memuaskan! 🌟' :
+                       hasilSelesai.skorAkhir >= 75 ? 'Kompeten / Tuntas 👍' :
+                       hasilSelesai.skorAkhir >= 60 ? 'Cukup Baik 📝' : 'Perlu Peningkatan Belajar 💪'}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Tampilan Tanpa Nilai (OFF) */}
+                <div className="relative mx-auto w-24 h-24 mb-6">
+                  <div className="absolute inset-0 bg-emerald-400/30 rounded-full blur-xl animate-pulse"></div>
+                  <div className="relative w-24 h-24 bg-gradient-to-tr from-emerald-500 to-teal-400 text-white rounded-full flex items-center justify-center shadow-xl shadow-emerald-500/40 border-4 border-white">
+                    <CheckCircle2 size={48} className="animate-bounce" />
+                  </div>
+                </div>
+
+                <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
+                  UJIAN TELAH SELESAI!
+                </h1>
+                
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 my-5 text-emerald-900 text-xs md:text-sm font-medium leading-relaxed">
+                  Jawaban Anda telah berhasil tersimpan dengan aman ke server. Pengumuman nilai akhir akan disampaikan oleh Guru / Pengawas Ujian.
+                </div>
+              </>
+            )}
+
+            {/* Info Rincian */}
+            <div className="grid grid-cols-2 gap-3 mb-6 text-left text-xs">
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">PESERTA</span>
+                <span className="font-bold text-slate-800 truncate block text-sm">{user?.nama}</span>
+              </div>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">PAKET UJIAN</span>
+                <span className="font-bold text-slate-800 truncate block text-sm">{paket?.nama_paket}</span>
+              </div>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 col-span-2 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-0.5">WAKTU PENGERJAAN</span>
+                  <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                    <Clock size={13} className="text-indigo-500" /> {hasilSelesai.waktuPakai}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-0.5">STATUS</span>
+                  <span className="font-black text-emerald-600 text-xs flex items-center gap-1">
+                    <Check size={14} /> Berhasil Terkirim
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Tombol Keluar */}
+            <button
+              onClick={() => {
+                window.location.href = '/';
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg shadow-slate-800/20 transition active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base tracking-wide"
+            >
+              <Home size={18} />
+              <span>KEMBALI KE BERANDA</span>
+            </button>
           </div>
         </div>
       )}
