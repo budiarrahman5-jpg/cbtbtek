@@ -49,7 +49,8 @@ export default function Home() {
         }
       }
 
-      if (data.status_login === '1') {
+      // Proteksi login ganda (status_login === '1') hanya berlaku untuk siswa
+      if (data.role?.toLowerCase() !== 'admin' && data.status_login === '1') {
         setErrorMsg('Akun sedang aktif di perangkat lain! Hubungi pengawas.');
         setIsLoading(false);
         return;
