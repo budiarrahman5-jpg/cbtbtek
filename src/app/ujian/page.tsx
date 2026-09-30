@@ -364,17 +364,24 @@ export default function UjianPage() {
     };
 
     const handleContextMenu = (e: Event) => e.preventDefault();
+    const handleSilentFullscreen = () => {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('click', handleSilentFullscreen);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('click', handleSilentFullscreen);
     };
   }, [user, paket, proteksiLayar, isBlocked]);
 
@@ -547,13 +554,17 @@ export default function UjianPage() {
     const sPakai = waktuDigunakan % 60;
     const formatWaktuPakai = `${mPakai} menit ${sPakai} detik`;
 
+    // Cek apakah paket ini mengandung soal yang butuh koreksi manual (Essay atau Isian tanpa kunci otomatis)
+    const butuhKoreksiManual = soalList.some((s: any) => s.tipe === 'Essay' || (s.tipe === 'Isian' && !s.kunci));
+    const statusKoreksiAwal = butuhKoreksiManual ? 'Menunggu Koreksi' : 'Selesai';
+
     try {
       await supabase.from('hasil').insert({
         user_id: user.id,
         paket_id: paket.id,
         waktu_sisa: sisaWaktu,
         detail_jawaban: jawaban,
-        status_koreksi: 'Selesai',
+        status_koreksi: statusKoreksiAwal,
         skor_akhir: skorAkhir,
         cheat_count: cheatCount
       });
@@ -610,20 +621,6 @@ export default function UjianPage() {
   return (
     <div className="flex flex-col h-screen bg-slate-100 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       <style dangerouslySetInnerHTML={{__html: richTextGlobalStyles}} />
-      
-      {/* Banner Peringatan Fullscreen */}
-      {!isFullscreen && proteksiLayar !== 'OFF' && (
-        <div className="bg-amber-500 text-white px-4 py-2 text-center text-xs md:text-sm font-bold flex items-center justify-center gap-3 z-30 shadow-md">
-          <ShieldAlert size={18} className="animate-bounce" />
-          <span>Ujian ini wajib dalam mode Layar Penuh (Fullscreen).</span>
-          <button 
-            onClick={aktivasiFullscreen} 
-            className="bg-white text-amber-900 px-3 py-1 rounded-full text-xs font-black shadow-sm hover:bg-amber-50 transition active:scale-95 flex items-center gap-1"
-          >
-            <Maximize2 size={14} /> Aktifkan Fullscreen
-          </button>
-        </div>
-      )}
 
       {/* Premium Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 p-3 md:p-4 shadow-sm flex justify-between items-center z-10 flex-shrink-0 sticky top-0">

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function HasilUjianPage() {
@@ -21,7 +21,25 @@ export default function HasilUjianPage() {
     isOpen: false, data: null, soalList: []
   });
   const [skorManual, setSkorManual] = useState<Record<string, number>>({});
-  const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);  useEffect(() => {
+  const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);
+  
+  // State Cetak PDF Ber-Kop Surat
+  const [modalPrintPDF, setModalPrintPDF] = useState(false);
+  const [kopSettings, setKopSettings] = useState({
+    instansiAtas: 'PEMERINTAH DAERAH PROVINSI / KABUPATEN',
+    dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+    namaSekolah: 'SMK / SMA / SMP CBT B-TEK',
+    alamat: 'Jl. Pendidikan No. 123, Telp. (021) 1234567, Website: www.sekolah.sch.id',
+    kota: 'Jakarta',
+    tanggalCetak: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+    kepalaSekolah: 'Nama Kepala Sekolah, M.Pd.',
+    nipKepala: '19750101 200003 1 001',
+    guruPengampu: 'Guru Pengampu / Proktor CBT',
+    nipGuru: '19820515 200801 1 005',
+    kkm: 75
+  });
+
+  useEffect(() => {
     fetchFilters();
     fetchHasil();
   }, [selectedPaket, selectedKelas]);
@@ -34,6 +52,17 @@ export default function HasilUjianPage() {
     let { data: k } = await supabase.from('kelas').select('*');
     k = filterDemoData(k, 'kelas');
     if (k) setKelasList(k);
+
+    const { data: pengData } = await supabase.from('pengaturan').select('*');
+    if (pengData) {
+      const map: Record<string, string> = {};
+      pengData.forEach((item: any) => { map[item.kunci] = item.nilai; });
+      setKopSettings(prev => ({
+        ...prev,
+        namaSekolah: map.nama_aplikasi || prev.namaSekolah,
+        kkm: Number(map.nilai_kkm) || prev.kkm
+      }));
+    }
   };
 
   const fetchHasil = async () => {
@@ -396,7 +425,14 @@ export default function HasilUjianPage() {
               onClick={handleDownloadExcel}
               className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition"
             >
-              <Download size={18} /> <span className="hidden md:inline">Download Hasil Ujian</span>
+              <Download size={18} /> <span className="hidden md:inline">Download Excel</span>
+            </button>
+            <button 
+              onClick={() => setModalPrintPDF(true)}
+              className="flex-1 md:flex-none bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-sm"
+              title="Cetak Laporan Resmi Ber-Kop Surat / Simpan ke PDF"
+            >
+              <Printer size={18} /> <span className="hidden md:inline">Cetak / PDF (Kop Resmi)</span>
             </button>
           </div>
         </div>
@@ -444,9 +480,9 @@ export default function HasilUjianPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-bold">Memuat hasil...</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-gray-500 font-bold">Memuat hasil...</td></tr>
               ) : filteredHasil.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500">Tidak ada data hasil.</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-gray-500">Tidak ada data hasil.</td></tr>
               ) : (
                 filteredHasil.map(h => (
                   <tr key={h.id} className="border-b hover:bg-gray-50">
@@ -456,7 +492,7 @@ export default function HasilUjianPage() {
                     </td>
                     <td className="p-3 font-semibold text-blue-800">{h.paket?.nama_paket}</td>
                     <td className="p-3 text-center">
-                       <span className={`px-2 py-1 rounded font-black ${h.skor_akhir >= 75 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
+                       <span className={`px-2.5 py-1 rounded font-black ${h.skor_akhir >= kopSettings.kkm ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
                          {h.skor_akhir}
                        </span>
                     </td>
@@ -469,13 +505,29 @@ export default function HasilUjianPage() {
                       {Math.floor(h.waktu_sisa / 60)} mnt {h.waktu_sisa % 60} dtk
                     </td>
                     <td className="p-3 text-center">
-                       <span className={`px-2 py-1 rounded text-xs font-bold ${h.status_koreksi === 'Selesai' ? 'bg-gray-100 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>
-                         {h.status_koreksi}
-                       </span>
+                       {h.status_koreksi === 'Menunggu Koreksi' ? (
+                         <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1.5 shadow-sm animate-pulse">
+                           <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                           Perlu Koreksi
+                         </span>
+                       ) : (
+                         <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5 shadow-sm">
+                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                           Selesai
+                         </span>
+                       )}
                     </td>
                     <td className="p-3 text-center">
                        <div className="flex items-center justify-center gap-2">
-                         <button onClick={() => openKoreksi(h)} className="text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1.5 rounded font-bold transition flex items-center gap-1" title="Koreksi Manual">
+                         <button 
+                           onClick={() => openKoreksi(h)} 
+                           className={`text-sm px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                             h.status_koreksi === 'Menunggu Koreksi'
+                               ? 'bg-amber-500 hover:bg-amber-600 text-white shadow ring-2 ring-amber-300'
+                               : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                           }`} 
+                           title={h.status_koreksi === 'Menunggu Koreksi' ? 'Koreksi Soal Essay/Isian Sekarang' : 'Koreksi Manual'}
+                         >
                             <CheckSquare size={14} /> Koreksi
                          </button>
                          <button onClick={() => handleResetCheat(h)} className="text-sm bg-orange-100 text-orange-700 hover:bg-orange-200 px-2 py-1.5 rounded font-bold transition flex items-center gap-1" title="Reset Cheat">
@@ -604,6 +656,226 @@ export default function HasilUjianPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Cetak PDF / Laporan Resmi Ber-Kop Surat */}
+      {modalPrintPDF && (
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden">
+            {/* Modal Header (No Print) */}
+            <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 no-print">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
+                  <Printer size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-slate-800">Cetak Laporan Hasil Ujian (Kop Surat Resmi)</h3>
+                  <p className="text-xs text-slate-500">Pratinjau cetak A4 ber-Kop Surat resmi untuk diunduh sebagai PDF atau dicetak langsung.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-md transition active:scale-95"
+                >
+                  <Printer size={16} /> Cetak / Simpan PDF
+                </button>
+                <button 
+                  onClick={() => setModalPrintPDF(false)} 
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Scrollable Area */}
+            <div className="p-6 overflow-y-auto flex-grow bg-slate-100/60 custom-scrollbar">
+              {/* Form Pengaturan Kop Cepat (No Print) */}
+              <div className="mb-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print space-y-3">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText size={14} className="text-indigo-600" /> Kustomisasi Identitas Kop Surat & Penandatangan
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Nama Lembaga / Sekolah</label>
+                    <input 
+                      type="text" 
+                      value={kopSettings.namaSekolah} 
+                      onChange={e => setKopSettings({...kopSettings, namaSekolah: e.target.value})}
+                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Dinas / Kementerian</label>
+                    <input 
+                      type="text" 
+                      value={kopSettings.dinas} 
+                      onChange={e => setKopSettings({...kopSettings, dinas: e.target.value})}
+                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Alamat Lembaga</label>
+                    <input 
+                      type="text" 
+                      value={kopSettings.alamat} 
+                      onChange={e => setKopSettings({...kopSettings, alamat: e.target.value})}
+                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 font-bold mb-1">Kota & Tanggal Cetak</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={kopSettings.kota} 
+                        onChange={e => setKopSettings({...kopSettings, kota: e.target.value})}
+                        className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
+                      />
+                      <input 
+                        type="text" 
+                        value={kopSettings.tanggalCetak} 
+                        onChange={e => setKopSettings({...kopSettings, tanggalCetak: e.target.value})}
+                        className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* DOKUMEN RESMI BER-KOP (Print Area) */}
+              <div id="printKopArea" className="bg-white p-8 md:p-12 rounded-xl shadow-lg border border-slate-200 max-w-4xl mx-auto print-document text-black">
+                {/* KOP SURAT RESMI */}
+                <div className="flex items-center gap-6 border-b-4 border-double border-black pb-4 mb-6">
+                  <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center border-2 border-dashed border-gray-400 rounded-lg text-gray-400 p-2 text-center text-[10px] font-bold">
+                    LOGO RESMI
+                  </div>
+                  <div className="flex-1 text-center">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700">{kopSettings.instansiAtas}</h4>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800">{kopSettings.dinas}</h3>
+                    <h2 className="text-xl font-black uppercase text-black tracking-tight">{kopSettings.namaSekolah}</h2>
+                    <p className="text-xs text-gray-600 mt-1">{kopSettings.alamat}</p>
+                  </div>
+                  <div className="w-20 h-20 flex-shrink-0 opacity-0"></div>
+                </div>
+
+                {/* JUDUL LAPORAN */}
+                <div className="text-center mb-6">
+                  <h3 className="text-base font-extrabold uppercase tracking-wide underline underline-offset-4">
+                    LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
+                  </h3>
+                  <p className="text-xs font-semibold text-gray-600 mt-1">
+                    TAHUN PELAJARAN {new Date().getFullYear()} / {new Date().getFullYear() + 1}
+                  </p>
+                </div>
+
+                {/* IDENTITAS UJIAN */}
+                <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-gray-800 mb-4 bg-gray-50 p-3 rounded border border-gray-200">
+                  <div className="space-y-1">
+                    <div>Paket Ujian : <span className="font-bold uppercase">{selectedPaket !== 'ALL' ? paketList.find(p => p.id === selectedPaket)?.nama_paket : 'Semua Paket'}</span></div>
+                    <div>Kelas : <span className="font-bold uppercase">{selectedKelas !== 'ALL' ? kelasList.find(k => k.id === selectedKelas)?.nama_kelas : 'Semua Kelas'}</span></div>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div>Standar KKM : <span className="font-bold">{kopSettings.kkm}</span></div>
+                    <div>Tanggal Cetak : <span className="font-bold">{kopSettings.tanggalCetak}</span></div>
+                  </div>
+                </div>
+
+                {/* TABEL HASIL RESMI */}
+                <table className="w-full text-xs border-collapse border border-gray-400 mb-6">
+                  <thead>
+                    <tr className="bg-gray-100 text-center font-bold text-gray-900">
+                      <th className="border border-gray-400 p-2 w-10">No</th>
+                      <th className="border border-gray-400 p-2 text-left">Nama Siswa</th>
+                      <th className="border border-gray-400 p-2 w-24">Kelas</th>
+                      <th className="border border-gray-400 p-2 text-left">Paket Soal</th>
+                      <th className="border border-gray-400 p-2 w-16">Nilai</th>
+                      <th className="border border-gray-400 p-2 w-20">Pelanggaran</th>
+                      <th className="border border-gray-400 p-2 w-28">Status Koreksi</th>
+                      <th className="border border-gray-400 p-2 w-24">Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHasil.length === 0 ? (
+                      <tr><td colSpan={8} className="p-4 text-center text-gray-500 border border-gray-400">Tidak ada data hasil.</td></tr>
+                    ) : (
+                      filteredHasil.map((h, i) => {
+                        const isTuntas = h.skor_akhir >= kopSettings.kkm;
+                        return (
+                          <tr key={h.id} className="text-gray-800">
+                            <td className="border border-gray-400 p-1.5 text-center">{i + 1}</td>
+                            <td className="border border-gray-400 p-1.5 font-bold">{h.users?.nama || '-'}</td>
+                            <td className="border border-gray-400 p-1.5 text-center">{kelasList.find(k => k.id === h.users?.kelas_id)?.nama_kelas || '-'}</td>
+                            <td className="border border-gray-400 p-1.5">{h.paket?.nama_paket || '-'}</td>
+                            <td className="border border-gray-400 p-1.5 text-center font-bold">{h.skor_akhir}</td>
+                            <td className="border border-gray-400 p-1.5 text-center">{h.cheat_count > 0 ? `${h.cheat_count}x` : '0'}</td>
+                            <td className="border border-gray-400 p-1.5 text-center">{h.status_koreksi}</td>
+                            <td className={`border border-gray-400 p-1.5 text-center font-bold ${isTuntas ? 'text-green-700' : 'text-red-600'}`}>
+                              {isTuntas ? 'TUNTAS' : 'REMIDIAL'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+
+                {/* STATISTIK RINGKASAN */}
+                <div className="grid grid-cols-4 gap-2 text-xs border border-gray-300 p-3 rounded mb-8 bg-gray-50 text-center font-semibold">
+                  <div>Total Peserta: <span className="font-bold">{filteredHasil.length}</span></div>
+                  <div>Rata-rata Nilai: <span className="font-bold">{(filteredHasil.reduce((a, b) => a + (Number(b.skor_akhir) || 0), 0) / (filteredHasil.length || 1)).toFixed(1)}</span></div>
+                  <div>Nilai Tertinggi: <span className="font-bold">{filteredHasil.length > 0 ? Math.max(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
+                  <div>Nilai Terendah: <span className="font-bold">{filteredHasil.length > 0 ? Math.min(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
+                </div>
+
+                {/* KOLOM TANDA TANGAN */}
+                <div className="grid grid-cols-2 text-xs font-semibold text-gray-900 pt-4">
+                  <div className="text-center">
+                    <p>Mengetahui,</p>
+                    <p className="font-bold">Kepala Sekolah / Penanggung Jawab CBT</p>
+                    <div className="h-20"></div>
+                    <p className="font-bold underline uppercase">{kopSettings.kepalaSekolah}</p>
+                    <p className="text-gray-600">NIP. {kopSettings.nipKepala}</p>
+                  </div>
+                  <div className="text-center">
+                    <p>{kopSettings.kota}, {kopSettings.tanggalCetak}</p>
+                    <p className="font-bold">Guru Pengampu / Proktor CBT</p>
+                    <div className="h-20"></div>
+                    <p className="font-bold underline uppercase">{kopSettings.guruPengampu}</p>
+                    <p className="text-gray-600">NIP. {kopSettings.nipGuru}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Style Cetak Print Khusus */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          header, aside, nav, .no-print {
+            display: none !important;
+          }
+          .print-document {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          @page {
+            size: portrait;
+            margin: 10mm;
+          }
+        }
+      `}} />
 
     </div>
   );

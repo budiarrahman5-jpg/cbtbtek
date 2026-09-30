@@ -17,6 +17,16 @@ export default function AnalisisSoalPage() {
   const [processedData, setProcessedData] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [itemStats, setItemStats] = useState<any[]>([]);
+  const [printScale, setPrintScale] = useState('auto');
+
+  const getEffectiveZoom = () => {
+    if (printScale !== 'auto') return printScale;
+    if (soalList.length > 45) return '55%';
+    if (soalList.length > 35) return '65%';
+    if (soalList.length > 25) return '75%';
+    if (soalList.length > 15) return '85%';
+    return '100%';
+  };
 
   useEffect(() => {
     fetchInit();
@@ -245,11 +255,56 @@ export default function AnalisisSoalPage() {
   return (
     <div className="space-y-6">
       <style dangerouslySetInnerHTML={{__html: `
+        @page { 
+          size: landscape; 
+          margin: 4mm; 
+        }
         @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          header, aside, .no-print { display: none !important; }
-          .print-area { overflow: visible !important; width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; }
-          @page { size: landscape; margin: 10mm; }
+          html, body {
+            background: white !important;
+            width: 100% !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          header, aside, nav, .no-print { 
+            display: none !important; 
+          }
+          .print-area { 
+            overflow: visible !important; 
+            width: 100% !important; 
+            max-width: 100% !important;
+            margin: 0 !important; 
+            padding: 0 !important; 
+            box-shadow: none !important; 
+            border: none !important; 
+          }
+          .print-scale-wrapper {
+            zoom: ${getEffectiveZoom()};
+            width: 100% !important;
+          }
+          .matriks-table {
+            width: 100% !important;
+            font-size: 6.5pt !important;
+            border-collapse: collapse !important;
+            table-layout: auto !important;
+          }
+          .matriks-table th, .matriks-table td {
+            padding: 1.5px 1px !important;
+            font-size: 6.5pt !important;
+            min-width: unset !important;
+          }
+          .matriks-table .col-nama {
+            min-width: 85px !important;
+            max-width: 120px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            font-size: 6.5pt !important;
+          }
+          .matriks-table .col-soal {
+            padding: 1px 0px !important;
+            min-width: 14px !important;
+            font-size: 6pt !important;
+          }
         }
       `}} />
 
@@ -291,12 +346,29 @@ export default function AnalisisSoalPage() {
           </button>
 
           {processedData.length > 0 && (
-            <button 
-              onClick={handlePrint}
-              className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95"
-            >
-              <Printer size={18} /> Cetak Matriks
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={printScale}
+                onChange={e => setPrintScale(e.target.value)}
+                className="border-2 border-slate-200 p-2 rounded-xl bg-slate-50 text-xs font-bold text-slate-700 outline-none"
+                title="Pilih Skala Cetak Matriks"
+              >
+                <option value="auto">Skala: Auto ({getEffectiveZoom()})</option>
+                <option value="100%">Skala: 100%</option>
+                <option value="85%">Skala: 85%</option>
+                <option value="70%">Skala: 70%</option>
+                <option value="60%">Skala: 60%</option>
+                <option value="50%">Skala: 50%</option>
+              </select>
+
+              <button 
+                onClick={handlePrint}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95"
+                title="Cetak Matriks atau Simpan ke PDF"
+              >
+                <Printer size={18} /> Cetak Matriks
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -319,37 +391,37 @@ export default function AnalisisSoalPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto custom-scrollbar flex-1">
+          <div className="overflow-x-auto custom-scrollbar flex-1 print-scale-wrapper">
             {/* Header Cetak untuk Print Mode */}
-            <div className="hidden print:block p-4 border-b text-center">
-              <h2 className="text-xl font-black uppercase">LAPORAN ANALISIS BUTIR SOAL (MATRIKS)</h2>
-              <p className="text-sm font-semibold text-slate-600 mt-1">
-                Paket: {paketList.find(p => p.id === selectedPaket)?.nama_paket} | Kelas: {selectedKelas !== 'ALL' ? kelasList.find(k => k.id === selectedKelas)?.nama_kelas : 'Semua Kelas'} | KKM: {kkm}
+            <div className="hidden print:block p-3 border-b text-center">
+              <h2 className="text-lg font-black uppercase">LAPORAN ANALISIS BUTIR SOAL (MATRIKS)</h2>
+              <p className="text-xs font-semibold text-slate-600 mt-0.5">
+                Paket: {paketList.find(p => p.id === selectedPaket)?.nama_paket} | Kelas: {selectedKelas !== 'ALL' ? kelasList.find(k => k.id === selectedKelas)?.nama_kelas : 'Semua Kelas'} | KKM: {kkm} | Total Soal: {soalList.length}
               </p>
             </div>
 
-            <table className="w-full text-center border-collapse text-xs whitespace-nowrap" border={1}>
+            <table className="w-full text-center border-collapse text-xs whitespace-nowrap matriks-table" border={1}>
               <thead className="bg-indigo-900 text-white sticky top-0 z-10 font-bold uppercase tracking-wider">
                 <tr>
                   <th className="p-2.5 border border-indigo-800 w-10">No</th>
-                  <th className="p-2.5 border border-indigo-800 text-left min-w-[160px]">Nama Siswa</th>
-                  <th className="p-2.5 border border-indigo-800 min-w-[80px]">Kelas</th>
+                  <th className="p-2.5 border border-indigo-800 text-left min-w-[160px] col-nama">Nama Siswa</th>
+                  <th className="p-2.5 border border-indigo-800 min-w-[70px]">Kelas</th>
                   {soalList.map((soal, i) => (
-                    <th key={soal.id} className="p-2 border border-indigo-800 w-9 min-w-[32px]" title={`Soal ${i + 1} (${soal.tipe})`}>
+                    <th key={soal.id} className="p-2 border border-indigo-800 w-9 min-w-[28px] col-soal" title={`Soal ${i + 1} (${soal.tipe})`}>
                       {i + 1}
                     </th>
                   ))}
-                  <th className="p-2.5 border border-indigo-800 min-w-[65px] bg-indigo-950">Jumlah</th>
-                  <th className="p-2.5 border border-indigo-800 min-w-[65px] bg-indigo-950">Nilai</th>
-                  <th className="p-2.5 border border-indigo-800 min-w-[60px] bg-emerald-900 text-emerald-100">Tuntas</th>
-                  <th className="p-2.5 border border-indigo-800 min-w-[60px] bg-rose-900 text-rose-100">Tidak</th>
+                  <th className="p-2.5 border border-indigo-800 min-w-[55px] bg-indigo-950">Jumlah</th>
+                  <th className="p-2.5 border border-indigo-800 min-w-[55px] bg-indigo-950">Nilai</th>
+                  <th className="p-2.5 border border-indigo-800 min-w-[50px] bg-emerald-900 text-emerald-100">Tuntas</th>
+                  <th className="p-2.5 border border-indigo-800 min-w-[50px] bg-rose-900 text-rose-100">Tidak</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700 divide-y divide-slate-200">
                 {processedData.map((s, idx) => (
                   <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-2 border border-slate-200 font-bold bg-slate-50 text-slate-600">{idx + 1}</td>
-                    <td className="p-2 border border-slate-200 text-left font-bold text-slate-800 truncate max-w-[200px]" title={s.nama}>
+                    <td className="p-2 border border-slate-200 text-left font-bold text-slate-800 truncate max-w-[200px] col-nama" title={s.nama}>
                       {s.nama}
                     </td>
                     <td className="p-2 border border-slate-200 text-slate-600 font-medium">{s.kelas}</td>
@@ -360,7 +432,7 @@ export default function AnalisisSoalPage() {
                         <td 
                           key={scIdx} 
                           className={clsx(
-                            "p-1.5 border border-slate-200 font-bold",
+                            "p-1.5 border border-slate-200 font-bold col-soal",
                             isHigh ? "bg-indigo-50 text-indigo-700 font-black" : "bg-white text-slate-400"
                           )}
                         >

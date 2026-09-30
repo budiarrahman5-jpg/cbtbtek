@@ -49,6 +49,23 @@ export default function TokenPage() {
       return;
     }
 
+    const paket = paketList.find(p => p.id === selectedPaket);
+    if (!paket || paket.token.toUpperCase().trim() !== token.toUpperCase().trim()) {
+      setErrorMsg('Token salah atau tidak sesuai paket!');
+      return;
+    }
+
+    // Request Fullscreen SECARA INSTAN saat tombol diklik (User Gesture murni)
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen();
+      }
+    } catch (e) {
+      console.log('Gagal masuk ke mode fullscreen:', e);
+    }
+
     setIsLoading(true);
 
     try {
@@ -60,14 +77,11 @@ export default function TokenPage() {
         .maybeSingle();
         
       if (cekHasil) {
+        // Jika sudah pernah selesai, kembalikan dari fullscreen
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
         setErrorMsg('Anda sudah menyelesaikan paket ujian ini! Silakan pilih paket lain.');
-        setIsLoading(false);
-        return;
-      }
-
-      const paket = paketList.find(p => p.id === selectedPaket);
-      if (!paket || paket.token.toUpperCase() !== token.toUpperCase()) {
-        setErrorMsg('Token salah atau tidak sesuai paket!');
         setIsLoading(false);
         return;
       }
@@ -85,15 +99,6 @@ export default function TokenPage() {
 
       localStorage.setItem('cbt_paket', JSON.stringify(paket));
       await supabase.from('log').insert({ user_id: user.id, aktivitas: `Mulai Ujian Paket: ${paket.nama_paket}` });
-
-      // Request Fullscreen
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        }
-      } catch (e) {
-        console.log('Gagal masuk ke mode fullscreen:', e);
-      }
 
       router.push('/ujian');
     } catch (error: any) {
