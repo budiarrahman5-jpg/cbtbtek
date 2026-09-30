@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2 } from 'lucide-react';
+import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function PantauSiswaPage() {
@@ -11,6 +11,14 @@ export default function PantauSiswaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  
+  // State Kirim Pesan Teguran / Broadcast
+  const [modalPesan, setModalPesan] = useState<{ isOpen: boolean; targetSiswa: any | null; pesan: string }>({
+    isOpen: false,
+    targetSiswa: null,
+    pesan: ''
+  });
+  const [isSendingPesan, setIsSendingPesan] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -71,6 +79,40 @@ export default function PantauSiswaPage() {
     }
   };
 
+  const handleKirimPesan = async () => {
+    if (!modalPesan.pesan.trim()) return alert('Pesan teguran tidak boleh kosong!');
+    setIsSendingPesan(true);
+    try {
+      if (modalPesan.targetSiswa) {
+        // Kirim teguran ke siswa tertentu via log aktivitas
+        const { error } = await supabase.from('log').insert({
+          user_id: modalPesan.targetSiswa.id,
+          aktivitas: `PESAN_PENGAWAS:::${modalPesan.pesan.trim()}`
+        });
+        if (error) throw error;
+        alert(`Pesan teguran berhasil dikirim langsung ke layar ${modalPesan.targetSiswa.nama}!`);
+      } else {
+        // Kirim broadcast pengumuman ke seluruh peserta via pengaturan
+        const { error } = await supabase.from('pengaturan').upsert({
+          kunci: 'pesan_broadcast',
+          nilai: JSON.stringify({
+            id: Date.now(),
+            pesan: modalPesan.pesan.trim(),
+            waktu: new Date().toISOString(),
+            pengirim: 'Pengawas Ujian'
+          })
+        }, { onConflict: 'kunci' });
+        if (error) throw error;
+        alert('Pesan pengumuman berhasil disiarkan ke SEMUA siswa yang sedang ujian!');
+      }
+      setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' });
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal mengirim pesan: ' + (err.message || 'Koneksi bermasalah'));
+    }
+    setIsSendingPesan(false);
+  };
+
   const filteredSiswa = siswa.filter(s => 
     s.nama?.toLowerCase().includes(search.toLowerCase()) || 
     s.username?.toLowerCase().includes(search.toLowerCase()) ||
@@ -95,14 +137,24 @@ export default function PantauSiswaPage() {
               <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><MonitorPlay size={24} /></div> 
               Live Monitoring Ujian
             </h2>
-            <button 
-              onClick={() => fetchData(true)}
-              disabled={isRefreshing}
-              className="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 px-4 py-2 rounded-lg font-bold transition-all disabled:opacity-50 active:scale-95 border border-slate-200"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
-              <span className="hidden sm:inline">{isRefreshing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setModalPesan({ isOpen: true, targetSiswa: null, pesan: '' })}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs md:text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-95"
+                title="Kirim pengumuman/pesan ke semua siswa yang sedang ujian"
+              >
+                <Megaphone size={16} />
+                <span className="hidden sm:inline">Broadcast Pesan</span>
+              </button>
+              <button 
+                onClick={() => fetchData(true)}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 px-3.5 py-2 rounded-lg font-bold text-xs md:text-sm transition-all disabled:opacity-50 active:scale-95 border border-slate-200"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
+                <span className="hidden sm:inline">{isRefreshing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
+              </button>
+            </div>
           </div>
           <p className="text-sm text-slate-500 font-medium ml-12">
             Pantau status pengerjaan ujian siswa secara real-time. Data diperbarui otomatis setiap 30 detik.
@@ -200,10 +252,17 @@ export default function PantauSiswaPage() {
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => setModalPesan({ isOpen: true, targetSiswa: s, pesan: '' })}
+                            className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                            title="Kirim Teguran / Pesan Langsung ke Layar Siswa"
+                          >
+                            <MessageSquare size={14} /> Teguran
+                          </button>
                           {isOnline && (
                             <button 
                               onClick={() => handleResetLogin(s.id, s.nama)}
-                              className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white px-3 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+                              className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-500 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1"
                               title="Jika siswa mengalami error/keluar mendadak dan tidak bisa login"
                             >
                               <PowerOff size={14} /> Reset Sesi
@@ -211,7 +270,7 @@ export default function PantauSiswaPage() {
                           )}
                           <button 
                             onClick={() => handleResetUjian(s.id, s.nama)}
-                            className="text-xs bg-red-100 text-red-700 hover:bg-red-500 hover:text-white px-3 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+                            className="text-xs bg-red-100 text-red-700 hover:bg-red-500 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1"
                             title="Hapus hasil dan kembalikan status ke Belum Ujian"
                           >
                             <Trash2 size={14} /> Reset Ujian
@@ -226,6 +285,90 @@ export default function PantauSiswaPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal Kirim Teguran / Broadcast */}
+      {modalPesan.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl text-white ${modalPesan.targetSiswa ? 'bg-amber-500 shadow-amber-500/20' : 'bg-indigo-600 shadow-indigo-600/20'} shadow-md`}>
+                  {modalPesan.targetSiswa ? <AlertTriangle size={20} /> : <Megaphone size={20} />}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-800">
+                    {modalPesan.targetSiswa ? `Kirim Teguran: ${modalPesan.targetSiswa.nama}` : 'Kirim Pengumuman Broadcast'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {modalPesan.targetSiswa 
+                      ? 'Pesan akan langsung muncul sebagai pop-up di layar ujian siswa ini.' 
+                      : 'Pesan akan langsung muncul di layar semua siswa yang sedang mengerjakan ujian.'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' })}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Pilih Pesan Cepat (Template):</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Harap fokus ke layar ujian dan jangan menoleh!",
+                    "Dilarang membuka tab lain atau aplikasi tambahan!",
+                    "Posisi duduk tegak dan pastikan wajah terlihat!",
+                    "Waktu ujian tersisa 10 menit lagi, silakan periksa jawaban Anda!"
+                  ].map((temp, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setModalPesan(prev => ({ ...prev, pesan: temp }))}
+                      className="text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-left transition"
+                    >
+                      {temp}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Isi Pesan / Teguran:</label>
+                <textarea
+                  rows={3}
+                  value={modalPesan.pesan}
+                  onChange={e => setModalPesan(prev => ({ ...prev, pesan: e.target.value }))}
+                  placeholder="Ketik pesan peringatan untuk siswa..."
+                  className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' })}
+                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleKirimPesan}
+                disabled={isSendingPesan || !modalPesan.pesan.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm font-bold rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95"
+              >
+                <Send size={16} /> {isSendingPesan ? 'Mengirim...' : 'Kirim Sekarang'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

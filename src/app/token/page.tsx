@@ -81,6 +81,21 @@ export default function TokenPage() {
         if (document.fullscreenElement && document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
         }
+
+        // Cek apakah Mode Review diaktifkan oleh admin/pengawas di pengaturan
+        const { data: pengReview } = await supabase
+          .from('pengaturan')
+          .select('nilai')
+          .eq('kunci', 'mode_review')
+          .maybeSingle();
+
+        if (pengReview?.nilai === 'ON') {
+          localStorage.setItem('cbt_paket', JSON.stringify(paket));
+          localStorage.setItem(`cbt_jawaban_${user.id}_${paket.id}`, JSON.stringify(cekHasil.detail_jawaban || {}));
+          router.push('/ujian?review=1');
+          return;
+        }
+
         setErrorMsg('Anda sudah menyelesaikan paket ujian ini! Silakan pilih paket lain.');
         setIsLoading(false);
         return;

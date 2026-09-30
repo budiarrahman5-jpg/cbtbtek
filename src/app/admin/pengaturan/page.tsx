@@ -8,6 +8,7 @@ export default function PengaturanPage() {
   const [settings, setSettings] = useState<Record<string, string>>({
     nama_aplikasi: '',
     tampil_nilai: 'ON',
+    mode_review: 'OFF',
     acak_soal: 'ON',
     acak_opsi: 'ON',
     nilai_kkm: '75',
@@ -169,6 +170,18 @@ export default function PengaturanPage() {
             <option value="OFF">OFF (Sembunyikan nilai akhir)</option>
           </select>
           <p className="text-xs text-gray-500 mt-1">Gunakan OFF jika ada soal Essay/Isian yang butuh koreksi manual.</p>
+        </div>
+
+        <div>
+          <label className="block font-bold text-sm mb-1 text-gray-700">Mode Review / Pembahasan Soal (Untuk Siswa)</label>
+          <select 
+            value={settings.mode_review || 'OFF'} onChange={e=>handleChange('mode_review', e.target.value)}
+            className="w-full border-2 p-3 rounded-md bg-gray-50 focus:ring-blue-500 outline-none font-bold"
+          >
+            <option value="OFF">OFF (Kunci Jawaban & Pembahasan Disembunyikan)</option>
+            <option value="ON">ON (Izinkan Siswa Meninjau Nomor Benar/Salah & Pembahasan)</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">Aktifkan setelah periode ujian berakhir agar siswa dapat melihat nomor mana saja yang salah dan belajar dari pembahasannya.</p>
         </div>
 
         <div className="pt-4 border-t border-gray-200">

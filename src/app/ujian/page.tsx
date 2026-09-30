@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -230,8 +230,23 @@ export default function UjianPage() {
   const [blokirError, setBlokirError] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(true);
 
-  // Pengaturan Tampil Nilai & Dialog Penyelesaian
+  // Fitur ANBK: Pengatur Ukuran Font Soal (A- / A / A+)
+  const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
+
+  // Fitur Proctor: Pesan Teguran Langsung & Broadcast Pengawas
+  const [pesanPengawas, setPesanPengawas] = useState<{
+    isOpen: boolean;
+    pesan: string;
+    pengirim: string;
+    waktu: string;
+  } | null>(null);
+  const lastCheckedMessageTime = useRef<string>(new Date().toISOString());
+  const lastBroadcastId = useRef<number>(0);
+
+  // Pengaturan Tampil Nilai & Mode Review Jawaban
   const [tampilNilai, setTampilNilai] = useState('ON');
+  const [modeReview, setModeReview] = useState('OFF');
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [warningIncomplete, setWarningIncomplete] = useState<{
     isOpen: boolean;
     belumDijawab: number[];
@@ -247,6 +262,12 @@ export default function UjianPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Muat ukuran font tersimpan
+    const savedFont = localStorage.getItem('cbt_font_size');
+    if (savedFont === 'sm' || savedFont === 'base' || savedFont === 'lg') {
+      setFontSize(savedFont);
+    }
+
     const fetchConfig = async () => {
       const { data } = await supabase.from('pengaturan').select('*');
       if (data) {
@@ -256,6 +277,8 @@ export default function UjianPage() {
         if (kb) setKodeBukaBlokir(kb.nilai);
         const tn = data.find((d: any) => d.kunci === 'tampil_nilai');
         if (tn) setTampilNilai(tn.nilai);
+        const mr = data.find((d: any) => d.kunci === 'mode_review');
+        if (mr) setModeReview(mr.nilai);
       }
     };
     fetchConfig();
@@ -298,6 +321,16 @@ export default function UjianPage() {
       setSisaWaktu((p.durasi_menit || 60) * 60);
     }
 
+    // Cek jika dibuka dalam mode review (?review=1)
+    if (typeof window !== 'undefined' && window.location.search.includes('review=1')) {
+      setIsReviewOpen(true);
+      setHasilSelesai({
+        isOpen: true,
+        skorAkhir: 0,
+        waktuPakai: 'Selesai'
+      });
+    }
+
     fetchSoal(p.id);
 
     // Coba aktifkan fullscreen
@@ -316,6 +349,118 @@ export default function UjianPage() {
       }
       setSoalList(soalArr);
     }
+  };
+
+  // Helper Nada Peringatan Web Audio API
+  const playAlertSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {}
+  };
+
+  // Listener Pesan Real-time dari Pengawas (Log Individual & Pengaturan Broadcast)
+  useEffect(() => {
+    if (!user) return;
+
+    const checkProctorMessages = async () => {
+      try {
+        // 1. Cek pesan individual dari tabel log
+        const { data: logs } = await supabase
+          .from('log')
+          .select('*')
+          .eq('user_id', user.id)
+          .gt('created_at', lastCheckedMessageTime.current)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (logs && logs.length > 0) {
+          const logItem = logs[0];
+          lastCheckedMessageTime.current = logItem.created_at;
+          if (logItem.aktivitas && logItem.aktivitas.startsWith('PESAN_PENGAWAS:::')) {
+            const msg = logItem.aktivitas.replace('PESAN_PENGAWAS:::', '');
+            playAlertSound();
+            setPesanPengawas({
+              isOpen: true,
+              pesan: msg,
+              pengirim: 'Pengawas Ujian (Teguran Khusus)',
+              waktu: new Date(logItem.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            });
+            return;
+          }
+        }
+
+        // 2. Cek pesan broadcast dari pengaturan
+        const { data: bData } = await supabase
+          .from('pengaturan')
+          .select('nilai')
+          .eq('kunci', 'pesan_broadcast')
+          .maybeSingle();
+
+        if (bData?.nilai) {
+          try {
+            const parsed = JSON.parse(bData.nilai);
+            if (parsed.id && parsed.id > lastBroadcastId.current) {
+              lastBroadcastId.current = parsed.id;
+              const diffMs = Date.now() - (new Date(parsed.waktu).getTime() || 0);
+              // Hanya tampilkan jika dikirim kurang dari 5 menit lalu
+              if (diffMs < 5 * 60 * 1000) {
+                playAlertSound();
+                setPesanPengawas({
+                  isOpen: true,
+                  pesan: parsed.pesan,
+                  pengirim: 'Pengumuman Pengawas (Semua Peserta)',
+                  waktu: new Date(parsed.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                });
+              }
+            }
+          } catch (e) {}
+        }
+      } catch (err) {}
+    };
+
+    const interval = setInterval(checkProctorMessages, 6000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const handleChangeFontSize = (size: 'sm' | 'base' | 'lg') => {
+    setFontSize(size);
+    localStorage.setItem('cbt_font_size', size);
+  };
+
+  const isJawabanBenar = (soal: any, jwb: any) => {
+    if (jwb === undefined || jwb === null || jwb === '') return false;
+    if (soal.tipe === 'PG') {
+      return typeof jwb === 'string' && jwb.toUpperCase() === soal.kunci?.toUpperCase();
+    }
+    if (soal.tipe === 'PG Kompleks') {
+      const kunciArr = (soal.kunci || '').split(',').map((k: string) => k.trim().toUpperCase());
+      if (!Array.isArray(jwb) || jwb.length === 0) return false;
+      return kunciArr.length === jwb.length && jwb.every((x: string) => kunciArr.includes(x.toUpperCase()));
+    }
+    if (soal.tipe === 'Menjodohkan') {
+      try {
+        const kunciAsli = JSON.parse(soal.kunci || '[]');
+        if (!Array.isArray(jwb) || jwb.length === 0) return false;
+        return kunciAsli.every((k: any) => jwb.some((j: any) => j.premisId === k.premisId && j.responsId === k.responsId));
+      } catch (e) {
+        return false;
+      }
+    }
+    if (soal.tipe === 'Isian') {
+      return !!soal.kunci && String(jwb).toLowerCase().trim() === soal.kunci.toLowerCase().trim();
+    }
+    return false;
   };
 
   const aktivasiFullscreen = async () => {
@@ -618,6 +763,18 @@ export default function UjianPage() {
     .prose p:last-child { margin-bottom: 0; }
   `;
 
+  const fontQuestionClass = fontSize === 'sm' 
+    ? 'text-sm md:text-base leading-relaxed prose-sm' 
+    : fontSize === 'lg' 
+      ? 'text-xl md:text-2xl leading-relaxed prose-lg' 
+      : 'text-base md:text-lg leading-relaxed prose-base';
+
+  const fontOptionClass = fontSize === 'sm'
+    ? 'text-xs md:text-sm'
+    : fontSize === 'lg'
+      ? 'text-lg md:text-xl'
+      : 'text-sm md:text-base';
+
   return (
     <div className="flex flex-col h-screen bg-slate-100 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       <style dangerouslySetInnerHTML={{__html: richTextGlobalStyles}} />
@@ -634,7 +791,36 @@ export default function UjianPage() {
           </div>
         </div>
         
-        <div className="flex items-center gap-3 md:gap-5 text-xs md:text-base flex-shrink-0">
+        <div className="flex items-center gap-2 md:gap-4 text-xs md:text-base flex-shrink-0">
+          {/* ANBK Font Resizer Control */}
+          <div className="flex items-center bg-slate-100 p-0.5 md:p-1 rounded-full border border-slate-200 text-xs font-bold text-slate-700 shadow-inner">
+            <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 px-2 hidden sm:inline">Font:</span>
+            <button 
+              type="button"
+              onClick={() => handleChangeFontSize('sm')} 
+              className={clsx("px-2 py-0.5 md:px-2.5 md:py-1 rounded-full transition text-[11px] md:text-xs", fontSize === 'sm' ? "bg-white text-indigo-600 shadow-sm font-black" : "text-slate-500 hover:text-slate-800")}
+              title="Ukuran Font Kecil (A-)"
+            >
+              A-
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleChangeFontSize('base')} 
+              className={clsx("px-2 py-0.5 md:px-2.5 md:py-1 rounded-full transition text-[11px] md:text-xs", fontSize === 'base' ? "bg-white text-indigo-600 shadow-sm font-black" : "text-slate-500 hover:text-slate-800")}
+              title="Ukuran Font Standar (A)"
+            >
+              A
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleChangeFontSize('lg')} 
+              className={clsx("px-2 py-0.5 md:px-2.5 md:py-1 rounded-full transition text-[11px] md:text-xs", fontSize === 'lg' ? "bg-white text-indigo-600 shadow-sm font-black" : "text-slate-500 hover:text-slate-800")}
+              title="Ukuran Font Besar (A+)"
+            >
+              A+
+            </button>
+          </div>
+
           <div className={clsx(
             "px-4 py-2 rounded-full font-black shadow-sm flex items-center gap-2 border transition-colors duration-500",
             isTimeCritical ? "bg-red-50 text-red-600 border-red-200 animate-pulse" : "bg-indigo-50 text-indigo-700 border-indigo-100"
@@ -671,7 +857,7 @@ export default function UjianPage() {
             
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
               <div 
-                className="text-base md:text-lg text-slate-800 mb-8 leading-relaxed font-medium prose prose-slate max-w-none prose-p:my-1"
+                className={`${fontQuestionClass} text-slate-800 mb-8 font-medium prose prose-slate max-w-none prose-p:my-1`}
                 dangerouslySetInnerHTML={{ __html: soalAktif.pertanyaan }} 
               />
               
@@ -731,8 +917,9 @@ export default function UjianPage() {
                             {opt.toUpperCase()}.
                           </span>
                           <div dangerouslySetInnerHTML={{ __html: soalAktif[key] }} className={clsx(
-                            "flex-1 prose prose-slate prose-sm overflow-hidden",
-                            isSelected ? "text-indigo-900 font-medium" : "text-slate-700"
+                            fontOptionClass,
+                            "flex-1 prose prose-slate overflow-hidden",
+                            isSelected ? "text-indigo-900 font-bold" : "text-slate-700"
                           )} />
                         </div>
                       </label>
@@ -1091,6 +1278,18 @@ export default function UjianPage() {
               </div>
             </div>
 
+            {/* Tombol Review & Pembahasan Jawaban (Jika Mode Review ON) */}
+            {modeReview === 'ON' && (
+              <button
+                type="button"
+                onClick={() => setIsReviewOpen(true)}
+                className="w-full mb-3 bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-indigo-600/30 transition active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base tracking-wide border border-indigo-400/30"
+              >
+                <BookOpen size={18} />
+                <span>LIHAT REVIEW & PEMBAHASAN SOAL</span>
+              </button>
+            )}
+
             {/* Tombol Keluar */}
             <button
               onClick={() => {
@@ -1104,6 +1303,181 @@ export default function UjianPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Pesan Teguran / Broadcast dari Pengawas */}
+      {pesanPengawas && pesanPengawas.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000] animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-amber-300">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <AlertTriangle size={36} className="text-white animate-bounce" />
+              </div>
+              <h3 className="font-black text-xl tracking-tight">Pemberitahuan Pengawas</h3>
+              <p className="text-xs text-amber-100 mt-1 font-semibold uppercase tracking-wider">{pesanPengawas.pengirim}</p>
+            </div>
+
+            <div className="p-6 text-center space-y-4">
+              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-left">
+                <p className="text-slate-800 font-bold text-base md:text-lg leading-relaxed">
+                  "{pesanPengawas.pesan}"
+                </p>
+                <span className="text-[11px] text-slate-400 font-semibold block mt-2">Diterima pukul {pesanPengawas.waktu}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPesanPengawas(null)}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 transition active:scale-95 text-sm uppercase tracking-wider"
+              >
+                Saya Mengerti & Lanjutkan Ujian
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Review Lembar Jawaban & Pembahasan (Mode Review) */}
+      {isReviewOpen && (
+        <div className="fixed inset-0 bg-slate-900/85 backdrop-blur-md z-[2100] flex items-center justify-center p-2 md:p-6 overflow-hidden animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
+            {/* Review Header */}
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-600/20">
+                  <BookOpen size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-slate-800">Review Jawaban & Pembahasan Soal</h3>
+                  <p className="text-xs text-slate-500 font-medium">Paket: {paket?.nama_paket} | Peserta: {user?.nama}</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsReviewOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Ringkasan Skor & Statistik Review */}
+            <div className="grid grid-cols-3 gap-2 md:gap-4 p-4 md:p-5 bg-indigo-50/50 border-b border-indigo-100 text-center text-xs md:text-sm font-bold">
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                <span className="text-slate-400 text-xs block mb-0.5">Total Soal</span>
+                <span className="text-slate-800 font-black text-lg md:text-xl">{soalList.length} Butir</span>
+              </div>
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-emerald-100">
+                <span className="text-emerald-500 text-xs block mb-0.5 flex items-center justify-center gap-1"><CheckCircle2 size={13}/> Jawaban Benar</span>
+                <span className="text-emerald-700 font-black text-lg md:text-xl">
+                  {soalList.filter(s => isJawabanBenar(s, jawaban[s.id])).length}
+                </span>
+              </div>
+              <div className="bg-white p-3 rounded-2xl shadow-sm border border-rose-100">
+                <span className="text-rose-500 text-xs block mb-0.5 flex items-center justify-center gap-1"><XCircle size={13}/> Belum Tepat</span>
+                <span className="text-rose-700 font-black text-lg md:text-xl">
+                  {soalList.filter(s => !isJawabanBenar(s, jawaban[s.id]) && s.tipe !== 'Essay').length}
+                </span>
+              </div>
+            </div>
+
+            {/* List Review Soal */}
+            <div className="p-4 md:p-6 overflow-y-auto flex-grow space-y-6 bg-slate-50/50 custom-scrollbar">
+              {soalList.map((soal, i) => {
+                const jwbSiswa = jawaban[soal.id];
+                const isBenar = isJawabanBenar(soal, jwbSiswa);
+                const isEssay = soal.tipe === 'Essay' || (soal.tipe === 'Isian' && !soal.kunci);
+
+                return (
+                  <div key={soal.id} className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+                    <div className="flex justify-between items-start gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-slate-100 text-slate-800 font-black px-3 py-1 rounded-xl text-sm">
+                          No. {i + 1}
+                        </span>
+                        <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                          {soal.tipe}
+                        </span>
+                      </div>
+                      
+                      {isEssay ? (
+                        <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                          Koreksi Manual
+                        </span>
+                      ) : isBenar ? (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={14} className="text-emerald-600" /> Benar (+{soal.skor_maks || 10})
+                        </span>
+                      ) : (
+                        <span className="bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1">
+                          <XCircle size={14} className="text-rose-600" /> Belum Tepat (0)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Pertanyaan */}
+                    <div 
+                      className="text-slate-800 font-semibold text-sm md:text-base mb-4 prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: soal.pertanyaan }} 
+                    />
+
+                    {/* Jawaban Siswa */}
+                    <div className={clsx(
+                      "p-3.5 rounded-xl border mb-3 text-xs md:text-sm font-medium",
+                      isEssay ? "bg-slate-50 border-slate-200 text-slate-800" :
+                      isBenar ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-rose-50 border-rose-200 text-rose-900"
+                    )}>
+                      <span className="font-bold block uppercase text-[10px] tracking-wider mb-1 text-slate-500">
+                        Jawaban Anda:
+                      </span>
+                      {jwbSiswa === undefined || jwbSiswa === null || jwbSiswa === '' ? (
+                        <span className="italic text-slate-400">Tidak Dijawab</span>
+                      ) : Array.isArray(jwbSiswa) ? (
+                        soal.tipe === 'Menjodohkan' ? (
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {jwbSiswa.map((conn: any, cIdx: number) => (
+                              <span key={cIdx} className="bg-white border px-2 py-0.5 rounded text-xs font-bold">
+                                {conn.premisId} ➔ {conn.responsId}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="font-bold">{jwbSiswa.join(', ')}</span>
+                        )
+                      ) : (
+                        <span className="font-bold">{String(jwbSiswa)}</span>
+                      )}
+                    </div>
+
+                    {/* Kunci Jawaban Resmi / Indikator */}
+                    {soal.kunci && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs md:text-sm font-medium text-emerald-950">
+                        <span className="font-bold block uppercase text-[10px] tracking-wider mb-1 text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 size={12} /> Kunci Jawaban / Indikator Penilaian:
+                        </span>
+                        <div className="font-bold" dangerouslySetInnerHTML={{
+                          __html: typeof soal.kunci === 'object' ? JSON.stringify(soal.kunci) : soal.kunci
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 border-t border-slate-100 bg-white flex justify-end">
+              <button 
+                type="button"
+                onClick={() => setIsReviewOpen(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition active:scale-95"
+              >
+                Tutup Pembahasan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
