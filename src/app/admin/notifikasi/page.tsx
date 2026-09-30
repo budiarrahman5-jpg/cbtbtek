@@ -100,9 +100,9 @@ export default function NotifikasiPage() {
                         )}
                         <h3 className="text-lg font-bold text-slate-800">{item.judul || 'Pengumuman Sistem'}</h3>
                       </div>
-                      <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-3">
+                      <div className="text-slate-700 text-sm md:text-[15px] leading-relaxed mb-4 whitespace-pre-line">
                         {item.pesan}
-                      </p>
+                      </div>
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
                         <Clock size={14} />
                         {formattedDate}
