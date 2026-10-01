@@ -48,11 +48,18 @@ export default function TambahSoalPage() {
   ]);
   const [jodohkanPengecoh, setJodohkanPengecoh] = useState<{id: string, text: string}[]>([]);
 
-  // AI Modal States
+  // AI Modal & Bulk States
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiJumlah, setAiJumlah] = useState<number>(1);
   const [isAILoading, setIsAILoading] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+
+  // Bulk Preview Modal States
+  const [showBulkPreviewModal, setShowBulkPreviewModal] = useState(false);
+  const [bulkQuestions, setBulkQuestions] = useState<any[]>([]);
+  const [bulkTargetPaket, setBulkTargetPaket] = useState('');
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
 
   useEffect(() => {
     fetchPaket();
@@ -341,7 +348,7 @@ export default function TambahSoalPage() {
       const res = await fetch('/api/gemini/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt, tipe: tipe })
+        body: JSON.stringify({ prompt: aiPrompt, tipe: tipe, jumlah: aiJumlah })
       });
       
       const data = await res.json();
@@ -353,6 +360,17 @@ export default function TambahSoalPage() {
         } else {
           alert('Gagal generate soal: ' + data.error);
         }
+        setIsAILoading(false);
+        return;
+      }
+
+      // Mode Massal / Bulk (Banyak Soal Sekaligus)
+      if (data.is_bulk && Array.isArray(data.result) && data.result.length > 0) {
+        setBulkQuestions(data.result);
+        setBulkTargetPaket(selectedPaket);
+        setShowAIModal(false);
+        setShowBulkPreviewModal(true);
+        setAiPrompt('');
         setIsAILoading(false);
         return;
       }
@@ -403,6 +421,114 @@ export default function TambahSoalPage() {
       alert('Terjadi kesalahan koneksi saat memanggil AI.');
     }
     setIsAILoading(false);
+  };
+
+  const handleUpdateBulkQuestion = (index: number, field: string, value: any) => {
+    setBulkQuestions(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleDeleteBulkQuestion = (index: number) => {
+    if (bulkQuestions.length <= 1) {
+      alert('Minimal harus ada 1 butir soal dalam daftar!');
+      return;
+    }
+    if (!confirm(`Hapus soal No. ${index + 1}?`)) return;
+    setBulkQuestions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddBlankBulkQuestion = () => {
+    setBulkQuestions(prev => [
+      ...prev,
+      {
+        tempId: Math.random().toString(36).substring(7),
+        tipe: tipe || 'PG',
+        pertanyaan: '',
+        opsi_a: '',
+        opsi_b: '',
+        opsi_c: '',
+        opsi_d: '',
+        opsi_e: '',
+        kunci: 'A',
+        skor_maks: 10
+      }
+    ]);
+  };
+
+  const handleSaveBulkQuestions = async () => {
+    if (!bulkTargetPaket) {
+      alert('Silakan pilih Paket Soal tujuan terlebih dahulu!');
+      return;
+    }
+
+    if (bulkQuestions.length === 0) {
+      alert('Tidak ada soal untuk disimpan.');
+      return;
+    }
+
+    for (let i = 0; i < bulkQuestions.length; i++) {
+      const q = bulkQuestions[i];
+      if (!q.pertanyaan || q.pertanyaan.trim() === '') {
+        alert(`Soal No. ${i + 1} belum memiliki teks pertanyaan!`);
+        return;
+      }
+      if (!q.kunci || q.kunci.trim() === '') {
+        alert(`Soal No. ${i + 1} belum memiliki kunci jawaban!`);
+        return;
+      }
+    }
+
+    setIsSavingBulk(true);
+    try {
+      const wrapHTML = (txt: string) => {
+        if (!txt) return '';
+        if (txt.trim().startsWith('<')) return txt;
+        return `<p>${txt}</p>`;
+      };
+
+      const payloads = bulkQuestions.map(q => ({
+        tipe: q.tipe || 'PG',
+        pertanyaan: wrapHTML(q.pertanyaan),
+        opsi_a: (q.tipe === 'PG' || q.tipe === 'PG Kompleks') ? wrapHTML(q.opsi_a) : null,
+        opsi_b: (q.tipe === 'PG' || q.tipe === 'PG Kompleks') ? wrapHTML(q.opsi_b) : null,
+        opsi_c: (q.tipe === 'PG' || q.tipe === 'PG Kompleks') ? wrapHTML(q.opsi_c) : null,
+        opsi_d: (q.tipe === 'PG' || q.tipe === 'PG Kompleks') ? wrapHTML(q.opsi_d) : null,
+        opsi_e: (q.tipe === 'PG' || q.tipe === 'PG Kompleks') && q.opsi_e ? wrapHTML(q.opsi_e) : null,
+        kunci: String(q.kunci || '').toUpperCase().trim(),
+        skor_maks: Number(q.skor_maks) || 10
+      }));
+
+      // Insert ke tabel soal
+      const { data: insertedSoal, error: errInsert } = await supabase
+        .from('soal')
+        .insert(payloads)
+        .select('id');
+
+      if (errInsert || !insertedSoal) throw errInsert;
+
+      // Hubungkan ke paket_soal
+      const relPayloads = insertedSoal.map(s => ({
+        paket_id: bulkTargetPaket,
+        soal_id: s.id
+      }));
+
+      const { error: errRel } = await supabase.from('paket_soal').insert(relPayloads);
+      if (errRel) throw errRel;
+
+      const namaPaket = paketList.find(p => p.id === bulkTargetPaket)?.nama_paket || 'Paket Ujian';
+      alert(`🎉 Berhasil! Sebanyak ${insertedSoal.length} soal berhasil disimpan ke ${namaPaket} dan Bank Soal!`);
+
+      setShowBulkPreviewModal(false);
+      setBulkQuestions([]);
+      setSelectedPaket(bulkTargetPaket);
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal menyimpan soal massal: ' + (err.message || 'Terjadi kesalahan database.'));
+    }
+    setIsSavingBulk(false);
   };
 
   return (
@@ -646,23 +772,51 @@ export default function TambahSoalPage() {
                 <X size={24} />
               </button>
             </div>
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                Pilih Tipe Soal yang Ingin Dibuat:
-              </label>
-              <select
-                value={tipe}
-                onChange={(e) => setTipe(e.target.value)}
-                disabled={isAILoading}
-                className="w-full border-2 border-indigo-100 rounded-xl p-3 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
-              >
-                <option value="PG">Pilihan Ganda (PG) - Ada Pertanyaan, Opsi A-D/E, & Kunci</option>
-                <option value="PG Kompleks">PG Kompleks (Banyak Jawaban Benar)</option>
-                <option value="Isian">Isian Singkat (Pertanyaan & Kunci Singkat)</option>
-                <option value="Essay">Essay / Uraian (Pertanyaan & Rubrik/Kunci)</option>
-                <option value="Menjodohkan">Menjodohkan (Pasangan Premis & Respons)</option>
-              </select>
-              <p className="text-xs text-slate-500 mt-1.5">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Tipe Soal:
+                </label>
+                <select
+                  value={tipe}
+                  onChange={(e) => setTipe(e.target.value)}
+                  disabled={isAILoading}
+                  className="w-full border-2 border-indigo-100 rounded-xl p-2.5 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
+                >
+                  <option value="PG">Pilihan Ganda (PG)</option>
+                  <option value="PG Kompleks">PG Kompleks</option>
+                  <option value="Isian">Isian Singkat</option>
+                  <option value="Essay">Essay / Uraian</option>
+                  <option value="Menjodohkan">Menjodohkan</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Jumlah Soal:
+                </label>
+                <select
+                  value={aiJumlah}
+                  onChange={(e) => setAiJumlah(Number(e.target.value))}
+                  disabled={isAILoading}
+                  className="w-full border-2 border-indigo-100 rounded-xl p-2.5 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
+                >
+                  <option value={1}>1 Soal (Langsung ke Form)</option>
+                  <option value={5}>5 Soal (Mode Massal + Preview)</option>
+                  <option value={10}>10 Soal (Mode Massal + Preview)</option>
+                  <option value={15}>15 Soal (Mode Massal + Preview)</option>
+                  <option value={20}>20 Soal (Mode Massal + Preview)</option>
+                </select>
+              </div>
+            </div>
+
+            {aiJumlah > 1 ? (
+              <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 leading-relaxed">
+                <span className="font-bold">✨ Mode Massal Aktif:</span> Groq AI akan membuat <strong>{aiJumlah} butir soal</strong> sekaligus. Anda dapat meninjau, mengedit setiap pertanyaan & pilihan jawaban, menambah atau menghapus nomor sebelum disimpan ke Paket Soal.
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mb-4">
                 {tipe === 'PG' || tipe === 'PG Kompleks' 
                   ? '✨ AI akan otomatis mengisi teks pertanyaan, opsi jawaban A, B, C, D, dan kunci jawaban.'
                   : tipe === 'Essay' || tipe === 'Isian'
@@ -670,11 +824,16 @@ export default function TambahSoalPage() {
                   : '✨ AI akan mengisi premis, respons yang benar, dan pengecoh.'
                 }
               </p>
-            </div>
+            )}
+
             <textarea
               className="w-full border-2 border-slate-200 rounded-xl p-4 focus:border-indigo-500 outline-none resize-none mb-4 font-medium"
               rows={4}
-              placeholder="Contoh: Buatkan 1 soal HOTS tentang fotosintesis untuk anak SMA, lengkap dengan pengecoh yang mengecoh."
+              placeholder={
+                aiJumlah > 1 
+                  ? `Contoh: Buatkan ${aiJumlah} soal pilihan ganda tentang Hukum Newton untuk kelas 10 SMA, tingkat kesulitan sedang hingga HOTS.` 
+                  : "Contoh: Buatkan 1 soal HOTS tentang fotosintesis untuk anak SMA, lengkap dengan pengecoh yang mengecoh."
+              }
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               disabled={isAILoading}
@@ -692,8 +851,219 @@ export default function TambahSoalPage() {
                 disabled={isAILoading}
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors"
               >
-                {isAILoading ? 'Menenun Sihir AI...' : <><Sparkles size={18} /> Generate Sekarang</>}
+                {isAILoading ? 'Menenun Sihir AI...' : <><Sparkles size={18} /> {aiJumlah > 1 ? `Generate ${aiJumlah} Soal` : 'Generate Sekarang'}</>}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK PREVIEW & EDIT MODAL */}
+      {showBulkPreviewModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-3 md:p-6 overflow-hidden">
+          <div className="bg-white w-full max-w-5xl h-[92vh] rounded-2xl shadow-2xl flex flex-col border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-4 md:px-6 md:py-4 bg-slate-900 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600/80 border border-indigo-400/30 flex items-center justify-center text-white shrink-0">
+                  <Sparkles size={20} className="text-amber-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg md:text-xl font-black text-white">Preview & Edit Soal AI Massal</h3>
+                    <span className="bg-indigo-500/30 text-indigo-200 text-xs px-2.5 py-0.5 rounded-full font-bold border border-indigo-400/30">
+                      {bulkQuestions.length} Butir Soal
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Periksa, edit teks pertanyaan, opsi jawaban, kunci, atau hapus nomor sebelum disimpan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Paket Selector & Close */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                  <span className="text-xs text-slate-300 font-bold whitespace-nowrap">Paket Tujuan:</span>
+                  <select
+                    value={bulkTargetPaket}
+                    onChange={(e) => setBulkTargetPaket(e.target.value)}
+                    className="bg-slate-900 text-white text-xs font-bold rounded-lg px-2 py-1 border border-slate-600 outline-none max-w-[180px] truncate"
+                  >
+                    <option value="">- Wajib Pilih Paket -</option>
+                    {paketList.map(p => (
+                      <option key={p.id} value={p.id}>{p.nama_paket}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (confirm('Tutup preview? Perubahan soal yang belum disimpan akan hilang.')) {
+                      setShowBulkPreviewModal(false);
+                    }
+                  }}
+                  className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Tutup"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Questions List */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-6">
+              {bulkQuestions.map((q, idx) => (
+                <div key={q.tempId || idx} className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm hover:border-indigo-300 transition-colors">
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-sm">
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-extrabold uppercase px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        {q.tipe || 'PG'}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteBulkQuestion(idx)}
+                      className="flex items-center gap-1 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
+                      title="Hapus soal ini"
+                    >
+                      <Trash2 size={16} /> Hapus
+                    </button>
+                  </div>
+
+                  {/* Pertanyaan */}
+                  <div className="mb-4">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Pertanyaan Soal:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={q.pertanyaan || ''}
+                      onChange={(e) => handleUpdateBulkQuestion(idx, 'pertanyaan', e.target.value)}
+                      placeholder="Ketik atau edit pertanyaan..."
+                      className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-medium text-slate-800 focus:border-indigo-500 outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Options (for PG or PG Kompleks) */}
+                  {(q.tipe === 'PG' || q.tipe === 'PG Kompleks' || !q.tipe) && (
+                    <div className="mb-4">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        Pilihan Jawaban (A - E):
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(['a', 'b', 'c', 'd', 'e'] as const).map((opt) => {
+                          const optKey = `opsi_${opt}`;
+                          const letter = opt.toUpperCase();
+                          const isCorrect = String(q.kunci || '').toUpperCase().includes(letter);
+                          return (
+                            <div
+                              key={opt}
+                              className={`flex items-start gap-2 p-2 rounded-xl border transition-all ${
+                                isCorrect
+                                  ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-400'
+                                  : 'bg-slate-50 border-slate-200'
+                              } ${opt === 'e' ? 'md:col-span-2' : ''}`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateBulkQuestion(idx, 'kunci', letter)}
+                                className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 mt-1 transition-all ${
+                                  isCorrect
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                }`}
+                                title={`Jadikan ${letter} sebagai Kunci Jawaban`}
+                              >
+                                {letter}
+                              </button>
+                              <textarea
+                                rows={2}
+                                value={q[optKey] || ''}
+                                onChange={(e) => handleUpdateBulkQuestion(idx, optKey, e.target.value)}
+                                placeholder={`Opsi ${letter}${opt === 'e' ? ' (Opsional)' : ''}`}
+                                className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-medium text-slate-800 focus:border-indigo-500 outline-none resize-none"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bottom Row: Kunci & Skor */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        Kunci Jawaban:
+                      </label>
+                      <input
+                        type="text"
+                        value={q.kunci || ''}
+                        onChange={(e) => handleUpdateBulkQuestion(idx, 'kunci', e.target.value.toUpperCase())}
+                        placeholder="Contoh: A, B, atau teks jawaban"
+                        className="w-full border-2 border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold uppercase focus:border-indigo-500 outline-none"
+                      />
+                      <span className="text-[11px] text-slate-400">
+                        Klik tombol huruf A/B/C/D/E di atas untuk set kunci instan.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        Bobot Skor:
+                      </label>
+                      <input
+                        type="number"
+                        value={q.skor_maks || 10}
+                        onChange={(e) => handleUpdateBulkQuestion(idx, 'skor_maks', Number(e.target.value))}
+                        className="w-full border-2 border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold text-indigo-700 focus:border-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sticky Footer */}
+            <div className="p-4 md:px-6 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <button
+                onClick={handleAddBlankBulkQuestion}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold text-sm hover:bg-indigo-100 transition-colors"
+              >
+                <Plus size={18} /> Tambah Soal Manual
+              </button>
+
+              <div className="w-full sm:w-auto flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (confirm('Batalkan dan tutup preview?')) {
+                      setShowBulkPreviewModal(false);
+                    }
+                  }}
+                  disabled={isSavingBulk}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-600 hover:bg-slate-100 transition-colors text-sm"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveBulkQuestions}
+                  disabled={isSavingBulk || bulkQuestions.length === 0}
+                  className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 disabled:opacity-50 text-sm transition-all"
+                >
+                  {isSavingBulk ? (
+                    'Menyimpan Soal...'
+                  ) : (
+                    <>
+                      <Save size={18} /> Simpan {bulkQuestions.length} Soal ke Paket
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

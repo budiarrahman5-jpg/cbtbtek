@@ -1,9 +1,87 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+function normalizeSingleQuestion(item: any, fallbackTipe: string = 'PG') {
+  if (!item) return null;
+  const targetTipe = item.tipe || fallbackTipe;
+
+  const normalized: any = {
+    tipe: targetTipe,
+    pertanyaan: item.pertanyaan || item.question || item.soal || '',
+    opsi_a: item.opsi_a || item.opsiA || item.a || item.A || item.options?.A || item.options?.a || item.pilihan_a || '',
+    opsi_b: item.opsi_b || item.opsiB || item.b || item.B || item.options?.B || item.options?.b || item.pilihan_b || '',
+    opsi_c: item.opsi_c || item.opsiC || item.c || item.C || item.options?.C || item.options?.c || item.pilihan_c || '',
+    opsi_d: item.opsi_d || item.opsiD || item.d || item.D || item.options?.D || item.options?.d || item.pilihan_d || '',
+    opsi_e: item.opsi_e || item.opsiE || item.e || item.E || item.options?.E || item.options?.e || item.pilihan_e || '',
+    kunci: (item.kunci || item.kunci_jawaban || item.kunciJawaban || item.jawaban || item.answer || item.correct_answer || '').toString().trim().toUpperCase(),
+    skor_maks: Number(item.skor_maks || item.skor || 10),
+    pasangan: item.pasangan || [],
+    pengecoh: item.pengecoh || []
+  };
+
+  // Jika opsi_a masih kosong tapi options/pilihan berbentuk array
+  if (!normalized.opsi_a && (targetTipe === 'PG' || targetTipe === 'PG Kompleks')) {
+    const arr = Array.isArray(item.options) ? item.options :
+                Array.isArray(item.pilihan) ? item.pilihan :
+                Array.isArray(item.choices) ? item.choices : null;
+    if (arr) {
+      normalized.opsi_a = arr[0] || '';
+      normalized.opsi_b = arr[1] || '';
+      normalized.opsi_c = arr[2] || '';
+      normalized.opsi_d = arr[3] || '';
+      normalized.opsi_e = arr[4] || '';
+    }
+  }
+
+  // Jika opsi masih kosong tapi teks pertanyaan memuat A. B. C. D.
+  if (!normalized.opsi_a && normalized.pertanyaan && (targetTipe === 'PG' || targetTipe === 'PG Kompleks')) {
+    const matchA = normalized.pertanyaan.match(/(?:^|\n)\s*(?:A[\.\)]|\(A\))\s*([^\n\r]+)/i);
+    const matchB = normalized.pertanyaan.match(/(?:^|\n)\s*(?:B[\.\)]|\(B\))\s*([^\n\r]+)/i);
+    const matchC = normalized.pertanyaan.match(/(?:^|\n)\s*(?:C[\.\)]|\(C\))\s*([^\n\r]+)/i);
+    const matchD = normalized.pertanyaan.match(/(?:^|\n)\s*(?:D[\.\)]|\(D\))\s*([^\n\r]+)/i);
+    const matchE = normalized.pertanyaan.match(/(?:^|\n)\s*(?:E[\.\)]|\(E\))\s*([^\n\r]+)/i);
+
+    if (matchA && matchB) {
+      normalized.opsi_a = matchA[1].trim();
+      normalized.opsi_b = matchB[1].trim();
+      normalized.opsi_c = matchC ? matchC[1].trim() : '';
+      normalized.opsi_d = matchD ? matchD[1].trim() : '';
+      normalized.opsi_e = matchE ? matchE[1].trim() : '';
+
+      const splitIdx = normalized.pertanyaan.search(/(?:^|\n)\s*(?:A[\.\)]|\(A\))/i);
+      if (splitIdx > 0) {
+        normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
+      }
+    }
+  }
+
+  // Bersihkan prefix 'A. ', 'B. ' dsb. jika AI menyertakannya di teks opsi
+  const cleanPrefix = (str: string, prefix: string) => {
+    if (!str) return '';
+    const regex = new RegExp(`^\\s*\\(?${prefix}[\\.\\)]\\s*`, 'i');
+    return str.replace(regex, '').trim();
+  };
+  normalized.opsi_a = cleanPrefix(normalized.opsi_a, 'A');
+  normalized.opsi_b = cleanPrefix(normalized.opsi_b, 'B');
+  normalized.opsi_c = cleanPrefix(normalized.opsi_c, 'C');
+  normalized.opsi_d = cleanPrefix(normalized.opsi_d, 'D');
+  normalized.opsi_e = cleanPrefix(normalized.opsi_e, 'E');
+
+  // Bersihkan opsi dari teks pertanyaan jika opsi terduplikasi di dalam pertanyaan
+  if (normalized.opsi_a && normalized.pertanyaan) {
+    const splitIdx = normalized.pertanyaan.search(/\n\s*([A-E]\.|\([A-E]\))/i);
+    if (splitIdx > 0) {
+      normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
+    }
+  }
+
+  return normalized;
+}
+
 export async function POST(req: Request) {
   try {
-    let { prompt, tipe } = await req.json();
+    let { prompt, tipe, jumlah = 1 } = await req.json();
+    const count = Math.max(1, Math.min(30, Number(jumlah) || 1));
 
     // 1. Ambil API Key dari Supabase
     const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'groq_api_key').single();
@@ -13,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });
     }
 
-    // Deteksi tipe jika prompt menyebut pilihan ganda / pg secara eksplisit
+    // Deteksi tipe default jika kosong
     const lowerPrompt = (prompt || '').toLowerCase();
     if (!tipe || tipe === '') {
       if (lowerPrompt.includes('pilihan ganda') || lowerPrompt.includes('pg') || lowerPrompt.includes('multiple choice')) {
@@ -27,13 +105,42 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Susun Prompt
-    let systemInstruction = `Anda adalah asisten pembuat soal ujian yang profesional. Buatlah SATU soal ujian berdasarkan instruksi user.
+    // 2. Susun System Prompt (Single vs Bulk)
+    let systemInstruction = '';
+    let fullPrompt = '';
+
+    if (count > 1) {
+      // MODE BULK (Banyak Soal Sekaligus)
+      systemInstruction = `Anda adalah asisten pembuat bank soal ujian sekolah profesional.
+Tugas Anda: Buatlah persis ${count} butir soal ujian berkualitas tinggi berdasarkan instruksi user.
+PENTING: Output Anda HARUS berupa JSON murni tanpa markdown, tanpa tag \`\`\`json, dan langsung bisa di-parse.
+
+Format JSON yang diharapkan:
+{
+  "soal": [
+    {
+      "nomor": 1,
+      "tipe": "${tipe === 'Campuran' ? 'PG' : tipe}",
+      "pertanyaan": "Teks pertanyaan saja (DILARANG memasukkan pilihan jawaban A, B, C, D ke dalam teks pertanyaan)",
+      "opsi_a": "Teks pilihan jawaban A",
+      "opsi_b": "Teks pilihan jawaban B",
+      "opsi_c": "Teks pilihan jawaban C",
+      "opsi_d": "Teks pilihan jawaban D",
+      "opsi_e": "",
+      "kunci": "Kunci jawaban huruf kapital yang benar (contoh: 'A' atau 'B', atau panduan singkat jika essay)",
+      "skor_maks": 10
+    }
+  ]
+}`;
+      fullPrompt = `Tipe Soal: ${tipe}\nJumlah yang WAJIB dibuat: ${count} butir soal\nInstruksi Materi: ${prompt}`;
+    } else {
+      // MODE SINGLE (1 Butir Soal)
+      systemInstruction = `Anda adalah asisten pembuat soal ujian yang profesional. Buatlah SATU soal ujian berdasarkan instruksi user.
 PENTING: Output Anda HARUS berupa JSON murni tanpa markdown, tanpa tag \`\`\`json, dan langsung bisa di-parse.
 `;
 
-    if (tipe === 'PG' || tipe === 'PG Kompleks') {
-      systemInstruction += `
+      if (tipe === 'PG' || tipe === 'PG Kompleks') {
+        systemInstruction += `
 Format JSON yang diharapkan:
 {
   "pertanyaan": "Teks pertanyaan saja (DILARANG memasukkan pilihan jawaban A, B, C, D ke dalam teks pertanyaan ini)",
@@ -44,8 +151,8 @@ Format JSON yang diharapkan:
   "opsi_e": "Teks pilihan jawaban E (boleh dikosongkan jika 4 opsi)",
   "kunci": "Kunci jawaban huruf kapital yang benar (contoh: 'A' atau 'B' untuk PG, atau 'A,C' untuk PG Kompleks)"
 }`;
-    } else if (tipe === 'Menjodohkan') {
-      systemInstruction += `
+      } else if (tipe === 'Menjodohkan') {
+        systemInstruction += `
 Format JSON yang diharapkan:
 {
   "pertanyaan": "Instruksi menjodohkan",
@@ -55,18 +162,19 @@ Format JSON yang diharapkan:
   ],
   "pengecoh": ["Pengecoh 1 (hanya di kanan)", "Pengecoh 2 (hanya di kanan)"]
 }`;
-    } else {
-      systemInstruction += `
+      } else {
+        systemInstruction += `
 Format JSON yang diharapkan:
 {
   "pertanyaan": "Teks pertanyaan lengkap",
   "kunci": "Kunci jawaban pasti atau panduan/rubrik singkat penilaian yang benar"
 }`;
+      }
+
+      fullPrompt = `Tipe Soal: ${tipe}\nInstruksi: ${prompt}`;
     }
 
-    const fullPrompt = `Tipe Soal: ${tipe}\nInstruksi: ${prompt}`;
-
-    // 3. Ambil daftar model aktif dari Groq (Anti-Decommission & Aman dari Prompt-Guard)
+    // 3. Ambil daftar model aktif dari Groq
     let activeModel = 'openai/gpt-oss-120b'; // Fallback
     try {
       const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
@@ -136,7 +244,7 @@ Format JSON yang diharapkan:
     let text = data.choices?.[0]?.message?.content || '';
     let parsedResult: any;
     try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       const jsonString = jsonMatch ? jsonMatch[0] : text.replace(/```json/gi, '').replace(/```/g, '').trim();
       parsedResult = JSON.parse(jsonString);
     } catch (parseError) {
@@ -144,76 +252,52 @@ Format JSON yang diharapkan:
       return NextResponse.json({ error: 'AI mengembalikan format yang tidak valid. Silakan coba lagi.' }, { status: 500 });
     }
 
-    // 6. Normalisasi output agar semua field terisi sempurna
-    const normalized: any = {
-      pertanyaan: parsedResult.pertanyaan || parsedResult.question || parsedResult.soal || '',
-      opsi_a: parsedResult.opsi_a || parsedResult.opsiA || parsedResult.a || parsedResult.A || parsedResult.options?.A || parsedResult.options?.a || parsedResult.pilihan_a || '',
-      opsi_b: parsedResult.opsi_b || parsedResult.opsiB || parsedResult.b || parsedResult.B || parsedResult.options?.B || parsedResult.options?.b || parsedResult.pilihan_b || '',
-      opsi_c: parsedResult.opsi_c || parsedResult.opsiC || parsedResult.c || parsedResult.C || parsedResult.options?.C || parsedResult.options?.c || parsedResult.pilihan_c || '',
-      opsi_d: parsedResult.opsi_d || parsedResult.opsiD || parsedResult.d || parsedResult.D || parsedResult.options?.D || parsedResult.options?.d || parsedResult.pilihan_d || '',
-      opsi_e: parsedResult.opsi_e || parsedResult.opsiE || parsedResult.e || parsedResult.E || parsedResult.options?.E || parsedResult.options?.e || parsedResult.pilihan_e || '',
-      kunci: (parsedResult.kunci || parsedResult.kunci_jawaban || parsedResult.kunciJawaban || parsedResult.jawaban || parsedResult.answer || parsedResult.correct_answer || '').toString().trim().toUpperCase(),
-      pasangan: parsedResult.pasangan || [],
-      pengecoh: parsedResult.pengecoh || []
-    };
-
-    // Jika opsi_a masih kosong tapi options/pilihan berbentuk array
-    if (!normalized.opsi_a) {
-      const arr = Array.isArray(parsedResult.options) ? parsedResult.options :
-                  Array.isArray(parsedResult.pilihan) ? parsedResult.pilihan :
-                  Array.isArray(parsedResult.choices) ? parsedResult.choices : null;
-      if (arr) {
-        normalized.opsi_a = arr[0] || '';
-        normalized.opsi_b = arr[1] || '';
-        normalized.opsi_c = arr[2] || '';
-        normalized.opsi_d = arr[3] || '';
-        normalized.opsi_e = arr[4] || '';
+    // 6. Normalisasi Respon
+    if (count > 1) {
+      // Ambil array soal dari berbagai kemungkinan struktur JSON AI
+      let rawList: any[] = [];
+      if (Array.isArray(parsedResult)) {
+        rawList = parsedResult;
+      } else if (Array.isArray(parsedResult.soal)) {
+        rawList = parsedResult.soal;
+      } else if (Array.isArray(parsedResult.questions)) {
+        rawList = parsedResult.questions;
+      } else if (Array.isArray(parsedResult.items)) {
+        rawList = parsedResult.items;
+      } else if (Array.isArray(parsedResult.data)) {
+        rawList = parsedResult.data;
+      } else {
+        // Fallback jika AI mengembalikan objek tunggal
+        rawList = [parsedResult];
       }
+
+      const normalizedList = rawList
+        .map((item, idx) => {
+          const n = normalizeSingleQuestion(item, tipe);
+          if (n) {
+            n.tempId = Math.random().toString(36).substring(7);
+            n.nomor = idx + 1;
+          }
+          return n;
+        })
+        .filter(Boolean);
+
+      return NextResponse.json({ 
+        result: normalizedList, 
+        is_bulk: true, 
+        count: normalizedList.length, 
+        tipe 
+      });
+
+    } else {
+      // Mode Single
+      const normalized = normalizeSingleQuestion(parsedResult, tipe);
+      return NextResponse.json({ 
+        result: normalized, 
+        is_bulk: false, 
+        tipe 
+      });
     }
-
-    // Jika opsi masih kosong tapi teks pertanyaan memuat A. B. C. D.
-    if (!normalized.opsi_a && normalized.pertanyaan) {
-      const matchA = normalized.pertanyaan.match(/(?:^|\n)\s*(?:A[\.\)]|\(A\))\s*([^\n\r]+)/i);
-      const matchB = normalized.pertanyaan.match(/(?:^|\n)\s*(?:B[\.\)]|\(B\))\s*([^\n\r]+)/i);
-      const matchC = normalized.pertanyaan.match(/(?:^|\n)\s*(?:C[\.\)]|\(C\))\s*([^\n\r]+)/i);
-      const matchD = normalized.pertanyaan.match(/(?:^|\n)\s*(?:D[\.\)]|\(D\))\s*([^\n\r]+)/i);
-      const matchE = normalized.pertanyaan.match(/(?:^|\n)\s*(?:E[\.\)]|\(E\))\s*([^\n\r]+)/i);
-
-      if (matchA && matchB) {
-        normalized.opsi_a = matchA[1].trim();
-        normalized.opsi_b = matchB[1].trim();
-        normalized.opsi_c = matchC ? matchC[1].trim() : '';
-        normalized.opsi_d = matchD ? matchD[1].trim() : '';
-        normalized.opsi_e = matchE ? matchE[1].trim() : '';
-
-        const splitIdx = normalized.pertanyaan.search(/(?:^|\n)\s*(?:A[\.\)]|\(A\))/i);
-        if (splitIdx > 0) {
-          normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
-        }
-      }
-    }
-
-    // Bersihkan prefix 'A. ', 'B. ' dsb. jika AI menyertakannya di teks opsi
-    const cleanPrefix = (str: string, prefix: string) => {
-      if (!str) return '';
-      const regex = new RegExp(`^\\s*\\(?${prefix}[\\.\\)]\\s*`, 'i');
-      return str.replace(regex, '').trim();
-    };
-    normalized.opsi_a = cleanPrefix(normalized.opsi_a, 'A');
-    normalized.opsi_b = cleanPrefix(normalized.opsi_b, 'B');
-    normalized.opsi_c = cleanPrefix(normalized.opsi_c, 'C');
-    normalized.opsi_d = cleanPrefix(normalized.opsi_d, 'D');
-    normalized.opsi_e = cleanPrefix(normalized.opsi_e, 'E');
-
-    // Bersihkan opsi dari teks pertanyaan jika opsi terduplikasi di dalam pertanyaan
-    if (normalized.opsi_a && normalized.pertanyaan) {
-      const splitIdx = normalized.pertanyaan.search(/\n\s*([A-E]\.|\([A-E]\))/i);
-      if (splitIdx > 0) {
-        normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
-      }
-    }
-
-    return NextResponse.json({ result: normalized, tipe });
 
   } catch (error: any) {
     console.error('Groq Generate API Error:', error);
