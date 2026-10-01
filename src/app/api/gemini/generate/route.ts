@@ -78,6 +78,97 @@ function normalizeSingleQuestion(item: any, fallbackTipe: string = 'PG') {
   return normalized;
 }
 
+function cleanAndParseJSON(text: string): any {
+  if (!text || typeof text !== 'string') return null;
+
+  // 1. Bersihkan reasoning/thinking tag <think>...</think>
+  let clean = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // 2. Bersihkan markdown codeblock
+  clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  // 3. Ambil substring antara kurung kurawal atau siku terluar
+  const firstBrace = clean.indexOf('{');
+  const firstBracket = clean.indexOf('[');
+  let startIdx = -1;
+  let endChar = '';
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endChar = '}';
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endChar = ']';
+  }
+
+  if (startIdx !== -1) {
+    const lastEnd = clean.lastIndexOf(endChar);
+    if (lastEnd > startIdx) {
+      clean = clean.substring(startIdx, lastEnd + 1);
+    } else {
+      clean = clean.substring(startIdx);
+    }
+  }
+
+  // Percobaan 1: Direct JSON.parse
+  try {
+    return JSON.parse(clean);
+  } catch (err1) {
+    // Percobaan 2: Bersihkan trailing comma & escaped backslashes (rumus LaTeX \sqrt, \frac, dll)
+    let repaired = clean.replace(/,\s*([}\]])/g, '$1');
+    repaired = repaired.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+
+    try {
+      return JSON.parse(repaired);
+    } catch (err2) {
+      // Percobaan 3: Auto-close unclosed string & braces jika teks terpotong di akhir
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+      let escaped = false;
+
+      for (let i = 0; i < repaired.length; i++) {
+        const char = repaired[i];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === '{') openBraces++;
+          else if (char === '}') openBraces = Math.max(0, openBraces - 1);
+          else if (char === '[') openBrackets++;
+          else if (char === ']') openBrackets = Math.max(0, openBrackets - 1);
+        }
+      }
+
+      if (inString) repaired += '"';
+      while (openBrackets > 0) {
+        repaired += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repaired += '}';
+        openBraces--;
+      }
+
+      try {
+        return JSON.parse(repaired);
+      } catch (err3) {
+        console.warn("JSON repair gagal, mencoba fallback regex:", err3);
+        return null;
+      }
+    }
+  }
+}
+
 export async function POST(req: Request) {
   try {
     let { prompt, tipe, jumlah = 1 } = await req.json();
@@ -229,7 +320,9 @@ Format JSON yang diharapkan:
           { role: 'system', content: systemInstruction },
           { role: 'user', content: fullPrompt }
         ],
-        temperature: 0.7
+        response_format: { type: 'json_object' },
+        max_tokens: 8192,
+        temperature: 0.6
       })
     });
 
@@ -240,16 +333,27 @@ Format JSON yang diharapkan:
       return NextResponse.json({ error: data.error?.message || 'Gagal memanggil Groq AI' }, { status: response.status });
     }
     
-    // 5. Ekstrak & Parse JSON
-    let text = data.choices?.[0]?.message?.content || '';
-    let parsedResult: any;
-    try {
-      const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-      const jsonString = jsonMatch ? jsonMatch[0] : text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      parsedResult = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error("Gagal parse JSON dari Groq:", text);
-      return NextResponse.json({ error: 'AI mengembalikan format yang tidak valid. Silakan coba lagi.' }, { status: 500 });
+    // 5. Ekstrak & Parse JSON secara aman dan tahan error
+    const text = data.choices?.[0]?.message?.content || '';
+    let parsedResult: any = cleanAndParseJSON(text);
+
+    if (!parsedResult) {
+      console.warn("cleanAndParseJSON gagal, menjalankan fallback ekstraksi teks bebas:", text);
+      const questionsRegex = /(?:^|\n)(?:Soal\s*\d+[:\.]?|\d+[\.\)])\s*([\s\S]*?)(?=(?:\n(?:Soal\s*\d+[:\.]?|\d+[\.\)])|$))/gi;
+      const matches = [...text.matchAll(questionsRegex)];
+
+      if (matches.length > 0) {
+        parsedResult = {
+          soal: matches.map((m, i) => {
+            const rawQ = m[1].trim();
+            return normalizeSingleQuestion({ nomor: i + 1, pertanyaan: rawQ }, tipe);
+          })
+        };
+      } else if (text && text.trim().length > 10) {
+        parsedResult = normalizeSingleQuestion({ pertanyaan: text.trim() }, tipe);
+      } else {
+        return NextResponse.json({ error: 'AI mengembalikan format yang tidak valid. Silakan coba lagi.' }, { status: 500 });
+      }
     }
 
     // 6. Normalisasi Respon
