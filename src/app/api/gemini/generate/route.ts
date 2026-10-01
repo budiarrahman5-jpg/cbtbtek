@@ -41,17 +41,43 @@ Format JSON yang diharapkan:
 
     const fullPrompt = `Tipe Soal: ${tipe}\nInstruksi: ${prompt}`;
 
-    // 3. Ambil daftar model aktif dari Groq (Anti-Decommission)
-    let activeModel = 'llama-3.3-70b-versatile'; // Fallback
+    // 3. Ambil daftar model aktif dari Groq (Anti-Decommission & Aman dari Prompt-Guard)
+    let activeModel = 'openai/gpt-oss-120b'; // Fallback
     try {
       const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
         headers: { 'Authorization': `Bearer ${apiKey}` }
       });
       if (modelsRes.ok) {
         const modelsData = await modelsRes.json();
-        // Cari model Llama terbaru, jika tidak ada ambil model teks pertama
-        const llamaModel = modelsData.data?.find((m: any) => m.id.includes('llama') && !m.id.includes('vision') && !m.id.includes('audio'));
-        activeModel = llamaModel ? llamaModel.id : (modelsData.data?.[0]?.id || activeModel);
+        const isInvalid = (id: string) => {
+          const lower = (id || '').toLowerCase();
+          return lower.includes('guard') || 
+                 lower.includes('safeguard') || 
+                 lower.includes('whisper') || 
+                 lower.includes('vision') || 
+                 lower.includes('audio') || 
+                 lower.includes('embed');
+        };
+
+        const validModels: string[] = (modelsData.data || [])
+          .filter((m: any) => !isInvalid(m.id))
+          .map((m: any) => m.id);
+
+        const priorities = [
+          'openai/gpt-oss-120b',
+          'llama-3.3-70b-versatile',
+          'llama-3.1-70b-versatile',
+          'qwen/qwen3.8-27b',
+          'openai/gpt-oss-20b',
+          'llama-3.1-8b-instant',
+          'llama3-70b-8192',
+          'llama3-8b-8192',
+          'mixtral-8x7b-32768',
+          'allam-2-7b'
+        ];
+
+        const matched = priorities.find(p => validModels.includes(p));
+        activeModel = matched || validModels[0] || activeModel;
       }
     } catch (e) {
       console.warn("Gagal mengambil list model Groq, menggunakan fallback:", e);

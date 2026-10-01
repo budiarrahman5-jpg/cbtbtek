@@ -240,9 +240,9 @@ export default function PengaturanPage() {
         </div>
 
         {/* AI Groq API Key */}
-        <div className="pt-4 border-t border-gray-200 opacity-75">
+        <div className="pt-4 border-t border-gray-200">
           <label className="block font-bold text-sm mb-1 text-purple-700 flex items-center gap-2">
-            ✨ API Key AI (Groq / Llama 3) <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full border border-yellow-300">Tahap Pengembangan</span>
+            ✨ API Key AI (Groq AI) <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full border border-emerald-300 font-bold">Aktif & Siap Digunakan</span>
           </label>
           <input 
             type="password" 

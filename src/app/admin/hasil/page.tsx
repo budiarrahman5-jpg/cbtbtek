@@ -406,12 +406,13 @@ export default function HasilUjianPage() {
           </h2>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <button 
-              onClick={() => alert('Fitur Koreksi Essay AI sedang dalam tahap pengembangan dan kalibrasi dengan API Groq. Silakan lakukan koreksi secara manual untuk sementara waktu.')}
-              className="flex-1 md:flex-none bg-gradient-to-r from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-md cursor-not-allowed"
-              title="Sedang Dalam Pengembangan"
+              onClick={handleKoreksiAI}
+              disabled={isAILoading || selectedPaket === 'ALL'}
+              className="flex-1 md:flex-none bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-md active:scale-95"
+              title={selectedPaket === 'ALL' ? 'Pilih satu paket ujian terlebih dahulu untuk koreksi otomatis' : 'Koreksi Otomatis Soal Essay/Isian dengan Groq AI'}
             >
-              <Sparkles size={18} /> 
-              <span className="hidden md:inline">Koreksi Essay AI (Pengembangan)</span>
+              <Sparkles size={18} className={isAILoading ? 'animate-spin' : 'animate-pulse'} /> 
+              <span className="hidden md:inline">{isAILoading ? 'AI Sedang Mengoreksi...' : 'Koreksi Essay AI'}</span>
             </button>
             <button 
               onClick={handleHitungUlang}
