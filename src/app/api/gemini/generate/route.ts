@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    const { prompt, tipe } = await req.json();
+    let { prompt, tipe } = await req.json();
 
     // 1. Ambil API Key dari Supabase
     const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'groq_api_key').single();
@@ -11,6 +11,20 @@ export async function POST(req: Request) {
 
     if (!apiKey || apiKey.trim() === '') {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });
+    }
+
+    // Deteksi tipe jika prompt menyebut pilihan ganda / pg secara eksplisit
+    const lowerPrompt = (prompt || '').toLowerCase();
+    if (!tipe || tipe === '') {
+      if (lowerPrompt.includes('pilihan ganda') || lowerPrompt.includes('pg') || lowerPrompt.includes('multiple choice')) {
+        tipe = 'PG';
+      } else if (lowerPrompt.includes('essay') || lowerPrompt.includes('esai') || lowerPrompt.includes('uraian')) {
+        tipe = 'Essay';
+      } else if (lowerPrompt.includes('isian')) {
+        tipe = 'Isian';
+      } else {
+        tipe = 'PG';
+      }
     }
 
     // 2. Susun Prompt
@@ -22,20 +36,31 @@ PENTING: Output Anda HARUS berupa JSON murni tanpa markdown, tanpa tag \`\`\`jso
       systemInstruction += `
 Format JSON yang diharapkan:
 {
-  "pertanyaan": "Teks pertanyaan lengkap",
-  "opsi_a": "Teks opsi A",
-  "opsi_b": "Teks opsi B",
-  "opsi_c": "Teks opsi C",
-  "opsi_d": "Teks opsi D",
-  "opsi_e": "Teks opsi E (kosongkan jika tidak perlu)",
-  "kunci": "Kunci jawaban yang benar (contoh: 'A' atau 'B,C' untuk PG Kompleks)"
+  "pertanyaan": "Teks pertanyaan saja (DILARANG memasukkan pilihan jawaban A, B, C, D ke dalam teks pertanyaan ini)",
+  "opsi_a": "Teks pilihan jawaban A",
+  "opsi_b": "Teks pilihan jawaban B",
+  "opsi_c": "Teks pilihan jawaban C",
+  "opsi_d": "Teks pilihan jawaban D",
+  "opsi_e": "Teks pilihan jawaban E (boleh dikosongkan jika 4 opsi)",
+  "kunci": "Kunci jawaban huruf kapital yang benar (contoh: 'A' atau 'B' untuk PG, atau 'A,C' untuk PG Kompleks)"
+}`;
+    } else if (tipe === 'Menjodohkan') {
+      systemInstruction += `
+Format JSON yang diharapkan:
+{
+  "pertanyaan": "Instruksi menjodohkan",
+  "pasangan": [
+    { "premis": "Premis 1 (kiri)", "respons": "Respons benar 1 (kanan)" },
+    { "premis": "Premis 2 (kiri)", "respons": "Respons benar 2 (kanan)" }
+  ],
+  "pengecoh": ["Pengecoh 1 (hanya di kanan)", "Pengecoh 2 (hanya di kanan)"]
 }`;
     } else {
       systemInstruction += `
 Format JSON yang diharapkan:
 {
   "pertanyaan": "Teks pertanyaan lengkap",
-  "kunci": "Kunci jawaban pasti/singkat (jika essay berikan panduan jawaban singkat)"
+  "kunci": "Kunci jawaban pasti atau panduan/rubrik singkat penilaian yang benar"
 }`;
     }
 
@@ -107,21 +132,43 @@ Format JSON yang diharapkan:
       return NextResponse.json({ error: data.error?.message || 'Gagal memanggil Groq AI' }, { status: response.status });
     }
     
-    // 4. Ekstrak JSON
+    // 5. Ekstrak & Parse JSON
     let text = data.choices?.[0]?.message?.content || '';
-    let parsedResult;
+    let parsedResult: any;
     try {
-      const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      parsedResult = JSON.parse(cleanText);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      parsedResult = JSON.parse(jsonString);
     } catch (parseError) {
       console.error("Gagal parse JSON dari Groq:", text);
       return NextResponse.json({ error: 'AI mengembalikan format yang tidak valid. Silakan coba lagi.' }, { status: 500 });
     }
 
-    return NextResponse.json({ result: parsedResult });
+    // 6. Normalisasi output agar semua field terisi sempurna
+    const normalized: any = {
+      pertanyaan: parsedResult.pertanyaan || parsedResult.question || parsedResult.soal || '',
+      opsi_a: parsedResult.opsi_a || parsedResult.opsiA || parsedResult.a || parsedResult.A || parsedResult.options?.A || parsedResult.options?.a || parsedResult.pilihan_a || '',
+      opsi_b: parsedResult.opsi_b || parsedResult.opsiB || parsedResult.b || parsedResult.B || parsedResult.options?.B || parsedResult.options?.b || parsedResult.pilihan_b || '',
+      opsi_c: parsedResult.opsi_c || parsedResult.opsiC || parsedResult.c || parsedResult.C || parsedResult.options?.C || parsedResult.options?.c || parsedResult.pilihan_c || '',
+      opsi_d: parsedResult.opsi_d || parsedResult.opsiD || parsedResult.d || parsedResult.D || parsedResult.options?.D || parsedResult.options?.d || parsedResult.pilihan_d || '',
+      opsi_e: parsedResult.opsi_e || parsedResult.opsiE || parsedResult.e || parsedResult.E || parsedResult.options?.E || parsedResult.options?.e || parsedResult.pilihan_e || '',
+      kunci: (parsedResult.kunci || parsedResult.kunci_jawaban || parsedResult.kunciJawaban || parsedResult.jawaban || parsedResult.answer || parsedResult.correct_answer || '').toString().trim().toUpperCase(),
+      pasangan: parsedResult.pasangan || [],
+      pengecoh: parsedResult.pengecoh || []
+    };
+
+    // Bersihkan opsi dari teks pertanyaan jika opsi terduplikasi di dalam pertanyaan
+    if (normalized.opsi_a && normalized.pertanyaan) {
+      const splitIdx = normalized.pertanyaan.search(/\n\s*([A-E]\.|\([A-E]\))/i);
+      if (splitIdx > 0) {
+        normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
+      }
+    }
+
+    return NextResponse.json({ result: normalized, tipe });
 
   } catch (error: any) {
-    console.error('Gemini API Error:', error);
+    console.error('Groq Generate API Error:', error);
     return NextResponse.json({ error: error.message || 'Terjadi kesalahan internal server.' }, { status: 500 });
   }
 }

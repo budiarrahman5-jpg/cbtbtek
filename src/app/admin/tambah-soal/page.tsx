@@ -356,11 +356,14 @@ export default function TambahSoalPage() {
         return;
       }
       
+      const targetTipe = data.tipe || tipe;
+      setTipe(targetTipe);
+
       // Auto fill form based on type
       setPertanyaan(data.result.pertanyaan || '');
       setKunci(data.result.kunci || '');
       
-      if (tipe === 'PG' || tipe === 'PG Kompleks') {
+      if (targetTipe === 'PG' || targetTipe === 'PG Kompleks') {
         setOpsi({
           A: data.result.opsi_a || '',
           B: data.result.opsi_b || '',
@@ -368,10 +371,23 @@ export default function TambahSoalPage() {
           D: data.result.opsi_d || '',
           E: data.result.opsi_e || ''
         });
+      } else if (targetTipe === 'Menjodohkan' && Array.isArray(data.result.pasangan) && data.result.pasangan.length > 0) {
+        setJodohkanPairs(data.result.pasangan.map((p: any) => ({
+          id: Math.random().toString(36).substring(7),
+          premis: p.premis || '',
+          respons: p.respons || ''
+        })));
+        if (Array.isArray(data.result.pengecoh) && data.result.pengecoh.length > 0) {
+          setJodohkanPengecoh(data.result.pengecoh.map((text: string) => ({
+            id: Math.random().toString(36).substring(7),
+            text: text
+          })));
+        }
       }
       
       setShowAIModal(false);
       setAiPrompt('');
+      alert(`Soal ${targetTipe} berhasil dibuat oleh AI beserta pilihan jawaban dan kunci!`);
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi saat memanggil AI.');
@@ -617,9 +633,31 @@ export default function TambahSoalPage() {
                 <X size={24} />
               </button>
             </div>
-            <p className="text-sm text-slate-500 mb-4">
-              AI akan membuatkan soal sesuai <strong>Tipe Soal</strong> yang sedang Anda pilih ({tipe}).
-            </p>
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Pilih Tipe Soal yang Ingin Dibuat:
+              </label>
+              <select
+                value={tipe}
+                onChange={(e) => setTipe(e.target.value)}
+                disabled={isAILoading}
+                className="w-full border-2 border-indigo-100 rounded-xl p-3 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
+              >
+                <option value="PG">Pilihan Ganda (PG) - Ada Pertanyaan, Opsi A-D/E, & Kunci</option>
+                <option value="PG Kompleks">PG Kompleks (Banyak Jawaban Benar)</option>
+                <option value="Isian">Isian Singkat (Pertanyaan & Kunci Singkat)</option>
+                <option value="Essay">Essay / Uraian (Pertanyaan & Rubrik/Kunci)</option>
+                <option value="Menjodohkan">Menjodohkan (Pasangan Premis & Respons)</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1.5">
+                {tipe === 'PG' || tipe === 'PG Kompleks' 
+                  ? '✨ AI akan otomatis mengisi teks pertanyaan, opsi jawaban A, B, C, D, dan kunci jawaban.'
+                  : tipe === 'Essay' || tipe === 'Isian'
+                  ? '✨ AI akan mengisi teks pertanyaan dan kunci/panduan indikator jawaban.'
+                  : '✨ AI akan mengisi premis, respons yang benar, dan pengecoh.'
+                }
+              </p>
+            </div>
             <textarea
               className="w-full border-2 border-slate-200 rounded-xl p-4 focus:border-indigo-500 outline-none resize-none mb-4 font-medium"
               rows={4}

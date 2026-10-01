@@ -118,6 +118,52 @@ export default function HasilUjianPage() {
     setIsAILoading(false);
   };
 
+  const [isAILoadingSiswa, setIsAILoadingSiswa] = useState(false);
+
+  const handleKoreksiAISiswa = async () => {
+    if (!modalKoreksi.data) return;
+    setIsAILoadingSiswa(true);
+    try {
+      const res = await fetch('/api/gemini/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hasil_id: modalKoreksi.data.id })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error === 'API_KEY_MISSING') {
+          alert('API Key Groq AI belum diatur di menu Pengaturan!');
+        } else {
+          alert('Gagal koreksi AI: ' + data.error);
+        }
+      } else {
+        if (data.skor_per_soal && Object.keys(data.skor_per_soal).length > 0) {
+          setSkorManual(prev => ({
+            ...prev,
+            ...data.skor_per_soal
+          }));
+        }
+        if (data.detail_jawaban) {
+          setModalKoreksi(prev => ({
+            ...prev,
+            data: {
+              ...prev.data,
+              detail_jawaban: data.detail_jawaban,
+              skor_akhir: data.skor_akhir,
+              status_koreksi: 'Selesai'
+            }
+          }));
+        }
+        alert(`Berhasil! Groq AI telah mengoreksi ${data.updated} soal essay/isian untuk siswa ini. Skor otomatis telah diisikan ke kotak penilaian.`);
+        fetchHasil();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat memanggil AI untuk koreksi siswa.');
+    }
+    setIsAILoadingSiswa(false);
+  };
+
   const handleDownloadExcel = () => {
     if (filteredHasil.length === 0) return alert('Tidak ada data untuk diunduh.');
 
@@ -551,16 +597,27 @@ export default function HasilUjianPage() {
       {modalKoreksi.isOpen && modalKoreksi.data && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
               <div>
                 <h3 className="font-extrabold text-xl text-slate-800 flex items-center gap-2">
-                  <CheckSquare className="text-indigo-600" /> Koreksi Jawaban
+                  <CheckSquare className="text-indigo-600" /> Koreksi Jawaban Siswa
                 </h3>
-                <p className="text-sm text-slate-500 font-medium mt-1">Peserta: <span className="text-indigo-600">{modalKoreksi.data.users?.nama}</span></p>
+                <p className="text-sm text-slate-500 font-medium mt-1">Peserta: <span className="text-indigo-600 font-bold">{modalKoreksi.data.users?.nama}</span></p>
               </div>
-              <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-colors">
-                 ✕
-              </button>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <button
+                  onClick={handleKoreksiAISiswa}
+                  disabled={isAILoadingSiswa}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
+                  title="Gunakan Groq AI untuk menilai seluruh jawaban essay/isian murid ini secara otomatis"
+                >
+                  <Sparkles size={16} className={isAILoadingSiswa ? "animate-spin" : "animate-pulse"} />
+                  <span>{isAILoadingSiswa ? "AI Sedang Menilai..." : "✨ Koreksi AI Murid Ini"}</span>
+                </button>
+                <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-colors">
+                  ✕
+                </button>
+              </div>
             </div>
             
             <div className="p-6 overflow-y-auto flex-grow bg-slate-50/50 custom-scrollbar">
