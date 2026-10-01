@@ -157,6 +157,54 @@ Format JSON yang diharapkan:
       pengecoh: parsedResult.pengecoh || []
     };
 
+    // Jika opsi_a masih kosong tapi options/pilihan berbentuk array
+    if (!normalized.opsi_a) {
+      const arr = Array.isArray(parsedResult.options) ? parsedResult.options :
+                  Array.isArray(parsedResult.pilihan) ? parsedResult.pilihan :
+                  Array.isArray(parsedResult.choices) ? parsedResult.choices : null;
+      if (arr) {
+        normalized.opsi_a = arr[0] || '';
+        normalized.opsi_b = arr[1] || '';
+        normalized.opsi_c = arr[2] || '';
+        normalized.opsi_d = arr[3] || '';
+        normalized.opsi_e = arr[4] || '';
+      }
+    }
+
+    // Jika opsi masih kosong tapi teks pertanyaan memuat A. B. C. D.
+    if (!normalized.opsi_a && normalized.pertanyaan) {
+      const matchA = normalized.pertanyaan.match(/(?:^|\n)\s*(?:A[\.\)]|\(A\))\s*([^\n\r]+)/i);
+      const matchB = normalized.pertanyaan.match(/(?:^|\n)\s*(?:B[\.\)]|\(B\))\s*([^\n\r]+)/i);
+      const matchC = normalized.pertanyaan.match(/(?:^|\n)\s*(?:C[\.\)]|\(C\))\s*([^\n\r]+)/i);
+      const matchD = normalized.pertanyaan.match(/(?:^|\n)\s*(?:D[\.\)]|\(D\))\s*([^\n\r]+)/i);
+      const matchE = normalized.pertanyaan.match(/(?:^|\n)\s*(?:E[\.\)]|\(E\))\s*([^\n\r]+)/i);
+
+      if (matchA && matchB) {
+        normalized.opsi_a = matchA[1].trim();
+        normalized.opsi_b = matchB[1].trim();
+        normalized.opsi_c = matchC ? matchC[1].trim() : '';
+        normalized.opsi_d = matchD ? matchD[1].trim() : '';
+        normalized.opsi_e = matchE ? matchE[1].trim() : '';
+
+        const splitIdx = normalized.pertanyaan.search(/(?:^|\n)\s*(?:A[\.\)]|\(A\))/i);
+        if (splitIdx > 0) {
+          normalized.pertanyaan = normalized.pertanyaan.substring(0, splitIdx).trim();
+        }
+      }
+    }
+
+    // Bersihkan prefix 'A. ', 'B. ' dsb. jika AI menyertakannya di teks opsi
+    const cleanPrefix = (str: string, prefix: string) => {
+      if (!str) return '';
+      const regex = new RegExp(`^\\s*\\(?${prefix}[\\.\\)]\\s*`, 'i');
+      return str.replace(regex, '').trim();
+    };
+    normalized.opsi_a = cleanPrefix(normalized.opsi_a, 'A');
+    normalized.opsi_b = cleanPrefix(normalized.opsi_b, 'B');
+    normalized.opsi_c = cleanPrefix(normalized.opsi_c, 'C');
+    normalized.opsi_d = cleanPrefix(normalized.opsi_d, 'D');
+    normalized.opsi_e = cleanPrefix(normalized.opsi_e, 'E');
+
     // Bersihkan opsi dari teks pertanyaan jika opsi terduplikasi di dalam pertanyaan
     if (normalized.opsi_a && normalized.pertanyaan) {
       const splitIdx = normalized.pertanyaan.search(/\n\s*([A-E]\.|\([A-E]\))/i);

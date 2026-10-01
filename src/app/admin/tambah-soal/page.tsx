@@ -52,6 +52,7 @@ export default function TambahSoalPage() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isAILoading, setIsAILoading] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
 
   useEffect(() => {
     fetchPaket();
@@ -359,31 +360,40 @@ export default function TambahSoalPage() {
       const targetTipe = data.tipe || tipe;
       setTipe(targetTipe);
 
+      const wrapHTML = (txt: string) => {
+        if (!txt) return '';
+        if (txt.trim().startsWith('<')) return txt;
+        return `<p>${txt}</p>`;
+      };
+
       // Auto fill form based on type
-      setPertanyaan(data.result.pertanyaan || '');
+      setPertanyaan(wrapHTML(data.result.pertanyaan || ''));
       setKunci(data.result.kunci || '');
       
       if (targetTipe === 'PG' || targetTipe === 'PG Kompleks') {
         setOpsi({
-          A: data.result.opsi_a || '',
-          B: data.result.opsi_b || '',
-          C: data.result.opsi_c || '',
-          D: data.result.opsi_d || '',
-          E: data.result.opsi_e || ''
+          A: wrapHTML(data.result.opsi_a || ''),
+          B: wrapHTML(data.result.opsi_b || ''),
+          C: wrapHTML(data.result.opsi_c || ''),
+          D: wrapHTML(data.result.opsi_d || ''),
+          E: wrapHTML(data.result.opsi_e || '')
         });
       } else if (targetTipe === 'Menjodohkan' && Array.isArray(data.result.pasangan) && data.result.pasangan.length > 0) {
         setJodohkanPairs(data.result.pasangan.map((p: any) => ({
           id: Math.random().toString(36).substring(7),
-          premis: p.premis || '',
-          respons: p.respons || ''
+          premis: wrapHTML(p.premis || ''),
+          respons: wrapHTML(p.respons || '')
         })));
         if (Array.isArray(data.result.pengecoh) && data.result.pengecoh.length > 0) {
           setJodohkanPengecoh(data.result.pengecoh.map((text: string) => ({
             id: Math.random().toString(36).substring(7),
-            text: text
+            text: wrapHTML(text)
           })));
         }
       }
+
+      // Force ReactQuill editors to re-render fresh with the new content
+      setEditorKey(k => k + 1);
       
       setShowAIModal(false);
       setAiPrompt('');
@@ -463,6 +473,7 @@ export default function TambahSoalPage() {
         </label>
         <div className="bg-white rounded-lg border-2 overflow-hidden border-slate-200 focus-within:border-indigo-500 transition-colors">
           <ReactQuill 
+            key={`pertanyaan-${editorKey}`}
             theme="snow" 
             value={pertanyaan} 
             onChange={setPertanyaan} 
@@ -482,9 +493,10 @@ export default function TambahSoalPage() {
               <b className="text-lg w-full text-indigo-700">Opsi {opt}.</b>
               <div className="bg-white rounded-lg border border-slate-200">
                 <ReactQuill 
+                  key={`opsi-${opt}-${editorKey}`}
                   theme="snow" 
                   value={(opsi as any)[opt]} 
-                  onChange={(val) => setOpsi({...opsi, [opt]: val})} 
+                  onChange={(val) => setOpsi(prev => ({ ...prev, [opt]: val }))} 
                   modules={modules}
                   formats={formats}
                 />
@@ -495,9 +507,10 @@ export default function TambahSoalPage() {
             <b className="text-lg w-full text-slate-500">Opsi E. <span className="text-sm font-normal">(Opsional)</span></b>
             <div className="bg-white rounded-lg border border-slate-200">
               <ReactQuill 
+                key={`opsi-E-${editorKey}`}
                 theme="snow" 
                 value={opsi.E} 
-                onChange={(val) => setOpsi({...opsi, E: val})} 
+                onChange={(val) => setOpsi(prev => ({ ...prev, E: val }))} 
                 modules={modules}
                 formats={formats}
               />
