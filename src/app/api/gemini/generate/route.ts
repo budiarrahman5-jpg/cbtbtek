@@ -1,19 +1,92 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+function cleanMathNotation(text: string): string {
+  if (!text || typeof text !== 'string') return text || '';
+
+  let res = text;
+
+  // 1. Ganti operator LaTeX umum
+  res = res.replace(/\\times\b/g, '×');
+  res = res.replace(/\\cdot\b/g, '·');
+  res = res.replace(/\\div\b/g, '÷');
+  res = res.replace(/\\pm\b/g, '±');
+  res = res.replace(/\\le(q)?\b/g, '≤');
+  res = res.replace(/\\ge(q)?\b/g, '≥');
+  res = res.replace(/\\neq\b/g, '≠');
+  res = res.replace(/\\approx\b/g, '≈');
+  res = res.replace(/\\infty\b/g, '∞');
+  res = res.replace(/\\pi\b/g, 'π');
+  res = res.replace(/\\alpha\b/g, 'α');
+  res = res.replace(/\\beta\b/g, 'β');
+  res = res.replace(/\\theta\b/g, 'θ');
+  res = res.replace(/\\degree\b|\\circ\b|\^\{\\circ\}|\^\s*°/g, '°');
+
+  // 2. Ganti pecahan sederhana \frac{a}{b} -> a/b
+  res = res.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '$1/$2');
+
+  // 3. Ganti akar \sqrt{x} -> √(x)
+  res = res.replace(/\\sqrt\{([^{}]+)\}/g, '√($1)');
+
+  // 4. Superscript map untuk pangkat matematika
+  const supMap: Record<string, string> = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+    'n': 'ⁿ', 'x': 'ˣ', 'y': 'ʸ', 'a': 'ᵃ', 'b': 'ᵇ'
+  };
+
+  // Pangkat kurung kurawal: ^{12}
+  res = res.replace(/\^\{([0-9a-zA-Z\+\-]+)\}/g, (_, p1) => {
+    return p1.split('').map((c: string) => supMap[c] || c).join('');
+  });
+
+  // Pangkat 1 karakter: ^2, ^3, ^x
+  res = res.replace(/\^([0-9a-zA-Z])/g, (_, p1) => {
+    return supMap[p1] || `^${p1}`;
+  });
+
+  // Subscript map untuk indeks kimia/matematika
+  const subMap: Record<string, string> = {
+    '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+    '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+    '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
+    'a': 'ₐ', 'e': 'ₑ', 'x': 'ₓ'
+  };
+
+  // Subscript kurung kurawal: _{12}
+  res = res.replace(/_\{([0-9a-zA-Z\+\-]+)\}/g, (_, p1) => {
+    return p1.split('').map((c: string) => subMap[c] || c).join('');
+  });
+
+  // Subscript 1 karakter: _1, _2
+  res = res.replace(/_([0-9])/g, (_, p1) => {
+    return subMap[p1] || `_${p1}`;
+  });
+
+  // 5. Bersihkan tanda dollar $...$ dan $$...$$
+  res = res.replace(/\$\$([^\$]+)\$\$/g, '$1');
+  res = res.replace(/\$([^\$]+)\$/g, '$1');
+
+  // Bersihkan spasi ganda
+  res = res.replace(/[ \t]+/g, ' ');
+
+  return res.trim();
+}
+
 function normalizeSingleQuestion(item: any, fallbackTipe: string = 'PG') {
   if (!item) return null;
   const targetTipe = item.tipe || fallbackTipe;
 
   const normalized: any = {
     tipe: targetTipe,
-    pertanyaan: item.pertanyaan || item.question || item.soal || '',
-    opsi_a: item.opsi_a || item.opsiA || item.a || item.A || item.options?.A || item.options?.a || item.pilihan_a || '',
-    opsi_b: item.opsi_b || item.opsiB || item.b || item.B || item.options?.B || item.options?.b || item.pilihan_b || '',
-    opsi_c: item.opsi_c || item.opsiC || item.c || item.C || item.options?.C || item.options?.c || item.pilihan_c || '',
-    opsi_d: item.opsi_d || item.opsiD || item.d || item.D || item.options?.D || item.options?.d || item.pilihan_d || '',
-    opsi_e: item.opsi_e || item.opsiE || item.e || item.E || item.options?.E || item.options?.e || item.pilihan_e || '',
-    kunci: (item.kunci || item.kunci_jawaban || item.kunciJawaban || item.jawaban || item.answer || item.correct_answer || '').toString().trim().toUpperCase(),
+    pertanyaan: cleanMathNotation(item.pertanyaan || item.question || item.soal || ''),
+    opsi_a: cleanMathNotation(item.opsi_a || item.opsiA || item.a || item.A || item.options?.A || item.options?.a || item.pilihan_a || ''),
+    opsi_b: cleanMathNotation(item.opsi_b || item.opsiB || item.b || item.B || item.options?.B || item.options?.b || item.pilihan_b || ''),
+    opsi_c: cleanMathNotation(item.opsi_c || item.opsiC || item.c || item.C || item.options?.C || item.options?.c || item.pilihan_c || ''),
+    opsi_d: cleanMathNotation(item.opsi_d || item.opsiD || item.d || item.D || item.options?.D || item.options?.d || item.pilihan_d || ''),
+    opsi_e: cleanMathNotation(item.opsi_e || item.opsiE || item.e || item.E || item.options?.E || item.options?.e || item.pilihan_e || ''),
+    kunci: cleanMathNotation((item.kunci || item.kunci_jawaban || item.kunciJawaban || item.jawaban || item.answer || item.correct_answer || '').toString().trim().toUpperCase()),
     skor_maks: Number(item.skor_maks || item.skor || 10),
     pasangan: item.pasangan || [],
     pengecoh: item.pengecoh || []
@@ -325,6 +398,15 @@ export async function POST(req: Request) {
 Tugas Anda: Buatlah persis ${count} butir soal ujian berkualitas tinggi berdasarkan instruksi user.
 PENTING: Output Anda HARUS berupa JSON murni tanpa markdown, tanpa tag \`\`\`json, dan langsung bisa di-parse.
 
+ATURAN NOTASI MATEMATIKA, RUMUS & SIMBOL:
+- DILARANG KERAS menggunakan format kode LaTeX dengan tanda dollar $ (contoh yang DILARANG: $2^3 \\times 3^2$, $\\frac{1}{2}$).
+- Tuliskan rumus dan notasi matematika secara rapi, bersih, dan mudah dibaca langsung:
+  * Gunakan simbol perkalian asli '×' (contoh: 2³ × 3² × 5)
+  * Gunakan angka pangkat/superscript unicode: ², ³, ⁴, ⁵, ⁿ
+  * Gunakan simbol pembagian '÷' atau bentuk pecahan biasa 'a/b'
+  * Gunakan simbol matematika baku: ±, ≤, ≥, ≠, ≈, √, π, °
+  * Gunakan indeks kimia subscript: H₂O, CO₂
+
 Format JSON yang diharapkan:
 {
   "soal": [
@@ -347,6 +429,15 @@ Format JSON yang diharapkan:
       // MODE SINGLE (1 Butir Soal)
       systemInstruction = `Anda adalah asisten pembuat soal ujian yang profesional. Buatlah SATU soal ujian berdasarkan instruksi user.
 PENTING: Output Anda HARUS berupa JSON murni tanpa markdown, tanpa tag \`\`\`json, dan langsung bisa di-parse.
+
+ATURAN NOTASI MATEMATIKA, RUMUS & SIMBOL:
+- DILARANG KERAS menggunakan format kode LaTeX dengan tanda dollar $ (contoh yang DILARANG: $2^3 \\times 3^2$, $\\frac{1}{2}$).
+- Tuliskan rumus dan notasi matematika secara rapi, bersih, dan mudah dibaca langsung:
+  * Gunakan simbol perkalian asli '×' (contoh: 2³ × 3² × 5)
+  * Gunakan angka pangkat/superscript unicode: ², ³, ⁴, ⁵, ⁿ
+  * Gunakan simbol pembagian '÷' atau bentuk pecahan biasa 'a/b'
+  * Gunakan simbol matematika baku: ±, ≤, ≥, ≠, ≈, √, π, °
+  * Gunakan indeks kimia subscript: H₂O, CO₂
 `;
 
       if (tipe === 'PG' || tipe === 'PG Kompleks') {
