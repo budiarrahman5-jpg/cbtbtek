@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X, Image as ImageIcon, Upload, CheckCircle2 } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X, Image as ImageIcon, Upload, CheckCircle2, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function HasilUjianPage() {
@@ -22,6 +22,10 @@ export default function HasilUjianPage() {
   });
   const [skorManual, setSkorManual] = useState<Record<string, number>>({});
   const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);
+
+  // State Seleksi Siswa & Ubah Status Koreksi Massal
+  const [selectedHasilIds, setSelectedHasilIds] = useState<string[]>([]);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
   // State Cetak PDF (Pilihan Kop Resmi vs Tanpa Kop)
   const [modalPrintPDF, setModalPrintPDF] = useState(false);
@@ -128,6 +132,60 @@ export default function HasilUjianPage() {
   const filteredHasil = hasil.filter(h => 
     h.users?.nama?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedHasilIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedHasilIds.length === filteredHasil.length) {
+      setSelectedHasilIds([]);
+    } else {
+      setSelectedHasilIds(filteredHasil.map(h => h.id));
+    }
+  };
+
+  const handleBulkUpdateStatus = async (newStatus: 'Selesai' | 'Belum') => {
+    if (selectedHasilIds.length === 0) return;
+    setIsUpdatingStatus(true);
+    try {
+      const { error } = await supabase
+        .from('hasil')
+        .update({ status_koreksi: newStatus })
+        .in('id', selectedHasilIds);
+
+      if (error) {
+        alert('Gagal memperbarui status: ' + error.message);
+      } else {
+        setHasil(prev => prev.map(h => selectedHasilIds.includes(h.id) ? { ...h, status_koreksi: newStatus } : h));
+        setSelectedHasilIds([]);
+      }
+    } catch(err: any) {
+      alert('Terjadi kesalahan: ' + err.message);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleSingleToggleStatus = async (id: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'Selesai' ? 'Belum' : 'Selesai';
+    try {
+      const { error } = await supabase
+        .from('hasil')
+        .update({ status_koreksi: nextStatus })
+        .eq('id', id);
+
+      if (error) {
+        alert('Gagal mengubah status: ' + error.message);
+      } else {
+        setHasil(prev => prev.map(h => h.id === id ? { ...h, status_koreksi: nextStatus } : h));
+      }
+    } catch(err: any) {
+      alert('Terjadi kesalahan: ' + err.message);
+    }
+  };
 
   const handleKoreksiAI = async () => {
     if (selectedPaket === 'ALL') {
@@ -556,10 +614,61 @@ export default function HasilUjianPage() {
           </div>
         </div>
 
+        {/* Bulk Action Bar jika ada siswa yang dipilih */}
+        {selectedHasilIds.length > 0 && (
+          <div className="bg-indigo-50 border-2 border-indigo-200 p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm mb-4 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <span className="bg-indigo-600 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-sm">
+                {selectedHasilIds.length} Siswa Dipilih
+              </span>
+              <span className="text-xs md:text-sm font-bold text-slate-800">
+                Ubah Status Koreksi Massal:
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => handleBulkUpdateStatus('Selesai')}
+                disabled={isUpdatingStatus}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs md:text-sm font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition active:scale-95 disabled:opacity-50"
+              >
+                <CheckCircle2 size={16} /> Tandai Selesai
+              </button>
+              <button
+                onClick={() => handleBulkUpdateStatus('Belum')}
+                disabled={isUpdatingStatus}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs md:text-sm font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition active:scale-95 disabled:opacity-50"
+              >
+                <Clock size={16} /> Tandai Belum
+              </button>
+              <button
+                onClick={handleToggleSelectAll}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs md:text-sm font-bold px-3 py-2 rounded-lg transition"
+              >
+                {selectedHasilIds.length === filteredHasil.length ? 'Batal Pilih Semua' : `Pilih Semua (${filteredHasil.length})`}
+              </button>
+              <button
+                onClick={() => setSelectedHasilIds([])}
+                className="text-slate-500 hover:text-slate-700 text-xs md:text-sm font-semibold px-2 py-2"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead className="bg-gray-100 text-gray-700 border-b">
               <tr>
+                <th className="p-3 w-10 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={filteredHasil.length > 0 && selectedHasilIds.length === filteredHasil.length}
+                    onChange={handleToggleSelectAll}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    title="Pilih Semua Siswa"
+                  />
+                </th>
                 <th className="p-3 font-semibold">Nama Siswa</th>
                 <th className="p-3 font-semibold">Kelas</th>
                 <th className="p-3 font-semibold">Paket Ujian</th>
@@ -572,12 +681,20 @@ export default function HasilUjianPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="p-8 text-center text-gray-500 font-bold">Memuat hasil...</td></tr>
+                <tr><td colSpan={9} className="p-8 text-center text-gray-500 font-bold">Memuat hasil...</td></tr>
               ) : filteredHasil.length === 0 ? (
-                <tr><td colSpan={8} className="p-8 text-center text-gray-500">Tidak ada data hasil.</td></tr>
+                <tr><td colSpan={9} className="p-8 text-center text-gray-500">Tidak ada data hasil.</td></tr>
               ) : (
                 filteredHasil.map(h => (
-                  <tr key={h.id} className="border-b hover:bg-gray-50">
+                  <tr key={h.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedHasilIds.includes(h.id) ? 'bg-indigo-50/40' : ''}`}>
+                    <td className="p-3 text-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedHasilIds.includes(h.id)}
+                        onChange={() => handleToggleSelect(h.id)}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="p-3 font-bold text-gray-800">{h.users?.nama}</td>
                     <td className="p-3 text-gray-600">
                       {kelasList.find(k => k.id === h.users?.kelas_id)?.nama_kelas || '-'}
@@ -597,28 +714,34 @@ export default function HasilUjianPage() {
                       {Math.floor(h.waktu_sisa / 60)} mnt {h.waktu_sisa % 60} dtk
                     </td>
                     <td className="p-3 text-center">
-                       {h.status_koreksi === 'Menunggu Koreksi' ? (
-                         <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1.5 shadow-sm animate-pulse">
-                           <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                           Perlu Koreksi
-                         </span>
-                       ) : (
-                         <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5 shadow-sm">
-                           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                           Selesai
-                         </span>
-                       )}
+                       <button
+                         onClick={() => handleSingleToggleStatus(h.id, h.status_koreksi)}
+                         className="cursor-pointer transition-transform active:scale-95"
+                         title="Klik untuk mengubah status koreksi siswa ini (Selesai / Belum)"
+                       >
+                         {h.status_koreksi === 'Selesai' ? (
+                           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5 shadow-sm hover:bg-emerald-200 transition">
+                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                             Selesai
+                           </span>
+                         ) : (
+                           <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1.5 shadow-sm hover:bg-amber-200 transition">
+                             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                             Belum
+                           </span>
+                         )}
+                       </button>
                     </td>
                     <td className="p-3 text-center">
                        <div className="flex items-center justify-center gap-2">
                          <button 
                            onClick={() => openKoreksi(h)} 
                            className={`text-sm px-2.5 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
-                             h.status_koreksi === 'Menunggu Koreksi'
+                             h.status_koreksi !== 'Selesai'
                                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow ring-2 ring-amber-300'
                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                            }`} 
-                           title={h.status_koreksi === 'Menunggu Koreksi' ? 'Koreksi Soal Essay/Isian Sekarang' : 'Koreksi Manual'}
+                           title={h.status_koreksi !== 'Selesai' ? 'Koreksi Soal Essay/Isian Sekarang' : 'Koreksi Manual'}
                          >
                             <CheckSquare size={14} /> Koreksi
                          </button>

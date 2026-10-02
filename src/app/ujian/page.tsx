@@ -727,9 +727,8 @@ export default function UjianPage() {
     const sPakai = waktuDigunakan % 60;
     const formatWaktuPakai = `${mPakai} menit ${sPakai} detik`;
 
-    // Cek apakah paket ini mengandung soal yang butuh koreksi manual (Essay atau Isian tanpa kunci otomatis)
-    const butuhKoreksiManual = soalList.some((s: any) => s.tipe === 'Essay' || (s.tipe === 'Isian' && !s.kunci));
-    const statusKoreksiAwal = butuhKoreksiManual ? 'Menunggu Koreksi' : 'Selesai';
+    // Status koreksi awal saat siswa selesai ujian adalah 'Belum' (belum dikoreksi)
+    const statusKoreksiAwal = 'Belum';
 
     try {
       await supabase.from('hasil').insert({
