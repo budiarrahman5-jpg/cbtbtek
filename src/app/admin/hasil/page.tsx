@@ -91,6 +91,333 @@ export default function HasilUjianPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  // Fungsi cetak PDF profesional melalui Iframe terisolasi
+  // Mengeliminasi tabrakan CSS dashboard, backdrop modal, dan masalah multi-halaman
+  const handlePrintPDF = () => {
+    const printContent = document.getElementById('printKopArea');
+    if (!printContent) return;
+
+    setIsPrinting(true);
+
+    const oldIframe = document.getElementById('cbt-print-frame');
+    if (oldIframe) {
+      oldIframe.remove();
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'cbt-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      setIsPrinting(false);
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Laporan Hasil Ujian CBT - ${selectedPaket !== 'ALL' ? (paketList.find(p => p.id === selectedPaket)?.nama_paket || '') : 'Semua Paket'}</title>
+          <meta charset="utf-8" />
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 12mm 10mm 15mm 10mm;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body {
+              font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+              color: #111827;
+              background: #ffffff;
+              margin: 0;
+              padding: 0;
+              font-size: 11px;
+              line-height: 1.4;
+            }
+            /* KOP SURAT RESMI */
+            .kop-container {
+              display: flex;
+              align-items: center;
+              gap: 18px;
+              border-bottom: 4px double #000000;
+              padding-bottom: 12px;
+              margin-bottom: 16px;
+            }
+            .kop-logo {
+              width: 75px;
+              height: 75px;
+              object-fit: contain;
+              flex-shrink: 0;
+            }
+            .kop-logo-placeholder {
+              width: 70px;
+              height: 70px;
+              border: 2px dashed #9ca3af;
+              border-radius: 6px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              font-size: 9px;
+              font-weight: bold;
+              color: #9ca3af;
+              flex-shrink: 0;
+              text-align: center;
+            }
+            .kop-text {
+              flex: 1;
+              text-align: center;
+            }
+            .kop-instansi {
+              font-size: 10px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #374151;
+              margin: 0;
+            }
+            .kop-dinas {
+              font-size: 12px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #1f2937;
+              margin: 2px 0;
+            }
+            .kop-sekolah {
+              font-size: 18px;
+              font-weight: 900;
+              text-transform: uppercase;
+              color: #000000;
+              margin: 3px 0;
+              letter-spacing: -0.2px;
+            }
+            .kop-alamat {
+              font-size: 10px;
+              color: #4b5563;
+              margin: 2px 0 0 0;
+            }
+            .kop-spacer {
+              width: 75px;
+              flex-shrink: 0;
+            }
+            /* JUDUL */
+            .judul-container {
+              text-align: center;
+              margin-bottom: 16px;
+            }
+            .judul-utama {
+              font-size: 14px;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              text-decoration: underline;
+              text-underline-offset: 4px;
+              margin: 0;
+            }
+            .judul-sub {
+              font-size: 11px;
+              font-weight: 600;
+              color: #4b5563;
+              margin: 4px 0 0 0;
+            }
+            .judul-tanpa-kop {
+              text-align: center;
+              border-bottom: 2px solid #374151;
+              padding-bottom: 10px;
+              margin-bottom: 16px;
+            }
+            /* IDENTITAS */
+            .identitas-grid {
+              display: flex;
+              justify-content: space-between;
+              background-color: #f8fafc !important;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              padding: 10px 14px;
+              margin-bottom: 14px;
+              font-size: 10.5px;
+              font-weight: 600;
+            }
+            .identitas-col {
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            }
+            /* TABEL HASIL */
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 14px;
+              page-break-inside: auto;
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              page-break-inside: avoid;
+              page-break-after: auto;
+            }
+            th, td {
+              border: 1px solid #4b5563;
+              padding: 6px 8px;
+              font-size: 10px;
+            }
+            th {
+              background-color: #f3f4f6 !important;
+              font-weight: bold;
+              color: #111827;
+              text-align: center;
+            }
+            td.text-center { text-align: center; }
+            td.text-left { text-align: left; }
+            td.text-right { text-align: right; }
+            .badge-tuntas {
+              color: #166534 !important;
+              font-weight: 900;
+            }
+            .badge-remidial {
+              color: #991b1b !important;
+              font-weight: 900;
+            }
+            /* STATISTIK */
+            .stats-container {
+              display: flex;
+              border: 1px solid #cbd5e1;
+              background-color: #f8fafc !important;
+              border-radius: 6px;
+              padding: 8px 12px;
+              margin-bottom: 20px;
+              font-size: 10.5px;
+              font-weight: 600;
+              justify-content: space-around;
+              text-align: center;
+            }
+            .stats-item span {
+              font-weight: 900;
+            }
+            /* TANDA TANGAN */
+            .ttd-container {
+              display: flex;
+              justify-content: space-between;
+              page-break-inside: avoid;
+              margin-top: 24px;
+              font-size: 11px;
+              font-weight: 600;
+            }
+            .ttd-box {
+              width: 45%;
+              text-align: center;
+            }
+            .ttd-space {
+              height: 65px;
+            }
+            .ttd-nama {
+              font-weight: 900;
+              text-decoration: underline;
+              text-transform: uppercase;
+              margin: 0;
+            }
+            .ttd-nip {
+              color: #4b5563;
+              margin: 2px 0 0 0;
+              font-size: 10px;
+            }
+            /* UTILITY FALLBACKS FOR PRINT */
+            .font-bold { font-weight: 700; }
+            .font-semibold { font-weight: 600; }
+            .font-extrabold { font-weight: 800; }
+            .font-black { font-weight: 900; }
+            .uppercase { text-transform: uppercase; }
+            .text-center { text-align: center; }
+            .text-left { text-align: left; }
+            .text-right { text-align: right; }
+            .text-xs { font-size: 10px; }
+            .text-sm { font-size: 11px; }
+            .text-base { font-size: 13px; }
+            .text-lg { font-size: 15px; }
+            .text-xl { font-size: 17px; }
+            .text-gray-500, .text-slate-500 { color: #6b7280; }
+            .text-gray-600, .text-slate-600 { color: #4b5563; }
+            .text-gray-700, .text-slate-700 { color: #374151; }
+            .text-gray-800, .text-slate-800 { color: #1f2937; }
+            .text-gray-900, .text-slate-900 { color: #111827; }
+            .text-green-700 { color: #15803d; }
+            .text-red-600 { color: #dc2626; }
+            .border-collapse { border-collapse: collapse; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    const triggerPrint = () => {
+      setIsPrinting(false);
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error('Gagal cetak iframe, fallback:', err);
+        window.print();
+      }
+    };
+
+    const images = doc.getElementsByTagName('img');
+    if (images.length > 0) {
+      let loaded = 0;
+      for (let i = 0; i < images.length; i++) {
+        if (images[i].complete) {
+          loaded++;
+        } else {
+          images[i].onload = () => {
+            loaded++;
+            if (loaded === images.length) setTimeout(triggerPrint, 150);
+          };
+          images[i].onerror = () => {
+            loaded++;
+            if (loaded === images.length) setTimeout(triggerPrint, 150);
+          };
+        }
+      }
+      if (loaded === images.length) {
+        setTimeout(triggerPrint, 250);
+      }
+    } else {
+      setTimeout(triggerPrint, 250);
+    }
+  };
+
+  // Tangani shortcut Ctrl+P / Cmd+P saat modal cetak terbuka
+  useEffect(() => {
+    if (!modalPrintPDF) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        handlePrintPDF();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalPrintPDF, handlePrintPDF]);
+
   useEffect(() => {
     fetchFilters();
     fetchHasil();
@@ -920,10 +1247,13 @@ export default function HasilUjianPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-md transition active:scale-95"
+                  onClick={handlePrintPDF}
+                  disabled={isPrinting}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-md transition active:scale-95 disabled:opacity-50"
+                  title="Cetak Dokumen atau Simpan sebagai PDF"
                 >
-                  <Printer size={16} /> Cetak / Simpan PDF
+                  <Printer size={16} className={isPrinting ? 'animate-spin' : ''} /> 
+                  {isPrinting ? 'Menyiapkan Dokumen...' : 'Cetak / Simpan PDF'}
                 </button>
                 <button 
                   onClick={() => setModalPrintPDF(false)} 
@@ -1163,13 +1493,13 @@ export default function HasilUjianPage() {
               <div id="printKopArea" className="bg-white p-8 md:p-12 rounded-xl shadow-lg border border-slate-200 max-w-4xl mx-auto print-document text-black">
                 {/* 1. KOP SURAT RESMI (HANYA DITAMPILKAN JIKA pakaiKop === true) */}
                 {pakaiKop && (
-                  <div className="flex items-center gap-6 border-b-4 border-double border-black pb-4 mb-6">
+                  <div className="kop-container flex items-center gap-6 border-b-4 border-double border-black pb-4 mb-6">
                     {/* Logo Sekolah */}
                     <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center">
                       {kopSettings.logoUrl ? (
-                        <img src={kopSettings.logoUrl} alt="Logo Sekolah" className="max-w-full max-h-full object-contain" />
+                        <img src={kopSettings.logoUrl} alt="Logo Sekolah" className="kop-logo max-w-full max-h-full object-contain" />
                       ) : (
-                        <div className="w-16 h-16 border-2 border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center text-gray-400 p-1 text-center text-[9px] font-bold">
+                        <div className="kop-logo-placeholder w-16 h-16 border-2 border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center text-gray-400 p-1 text-center text-[9px] font-bold">
                           <span>LOGO</span>
                           <span>SEKOLAH</span>
                         </div>
@@ -1177,35 +1507,35 @@ export default function HasilUjianPage() {
                     </div>
 
                     {/* Identitas Instansi & Sekolah */}
-                    <div className="flex-1 text-center">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700">{kopSettings.instansiAtas}</h4>
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800">{kopSettings.dinas}</h3>
-                      <h2 className="text-xl font-black uppercase text-black tracking-tight">{kopSettings.namaSekolah}</h2>
-                      <p className="text-xs text-gray-600 mt-1">{kopSettings.alamat}</p>
+                    <div className="kop-text flex-1 text-center">
+                      <h4 className="kop-instansi text-xs font-bold uppercase tracking-wider text-gray-700">{kopSettings.instansiAtas}</h4>
+                      <h3 className="kop-dinas text-sm font-bold uppercase tracking-wider text-gray-800">{kopSettings.dinas}</h3>
+                      <h2 className="kop-sekolah text-xl font-black uppercase text-black tracking-tight">{kopSettings.namaSekolah}</h2>
+                      <p className="kop-alamat text-xs text-gray-600 mt-1">{kopSettings.alamat}</p>
                     </div>
 
                     {/* Spacer agar posisi tengah simetris */}
-                    <div className="w-20 h-20 flex-shrink-0 opacity-0 hidden sm:block"></div>
+                    <div className="kop-spacer w-20 h-20 flex-shrink-0 opacity-0 hidden sm:block"></div>
                   </div>
                 )}
 
                 {/* 2. JUDUL LAPORAN */}
                 {pakaiKop ? (
-                  <div className="text-center mb-6">
-                    <h3 className="text-base font-extrabold uppercase tracking-wide underline underline-offset-4">
+                  <div className="judul-container text-center mb-6">
+                    <h3 className="judul-utama text-base font-extrabold uppercase tracking-wide underline underline-offset-4">
                       LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
                     </h3>
-                    <p className="text-xs font-semibold text-gray-600 mt-1">
+                    <p className="judul-sub text-xs font-semibold text-gray-600 mt-1">
                       TAHUN PELAJARAN {new Date().getFullYear()} / {new Date().getFullYear() + 1}
                     </p>
                   </div>
                 ) : (
                   /* Format Tanpa Kop: Hanya Judul, Tanpa Logo & TTD */
-                  <div className="text-center border-b-2 border-gray-400 pb-3 mb-6">
-                    <h2 className="text-lg font-black uppercase text-black tracking-wide">
+                  <div className="judul-tanpa-kop text-center border-b-2 border-gray-400 pb-3 mb-6">
+                    <h2 className="judul-utama text-lg font-black uppercase text-black tracking-wide">
                       LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
                     </h2>
-                    <p className="text-sm font-bold text-gray-700 uppercase mt-0.5">
+                    <p className="judul-sub text-sm font-bold text-gray-700 uppercase mt-0.5">
                       {kopSettings.namaSekolah}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
@@ -1215,12 +1545,12 @@ export default function HasilUjianPage() {
                 )}
 
                 {/* 3. IDENTITAS UJIAN */}
-                <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-gray-800 mb-4 bg-gray-50 p-3 rounded border border-gray-200">
-                  <div className="space-y-1">
+                <div className="identitas-grid grid grid-cols-2 gap-4 text-xs font-semibold text-gray-800 mb-4 bg-gray-50 p-3 rounded border border-gray-200">
+                  <div className="identitas-col space-y-1">
                     <div>Paket Ujian : <span className="font-bold uppercase">{selectedPaket !== 'ALL' ? paketList.find(p => p.id === selectedPaket)?.nama_paket : 'Semua Paket'}</span></div>
                     <div>Kelas : <span className="font-bold uppercase">{selectedKelas !== 'ALL' ? kelasList.find(k => k.id === selectedKelas)?.nama_kelas : 'Semua Kelas'}</span></div>
                   </div>
-                  <div className="space-y-1 text-right">
+                  <div className="identitas-col space-y-1 text-right">
                     <div>Standar KKM : <span className="font-bold">{kopSettings.kkm}</span></div>
                     <div>Tanggal Cetak : <span className="font-bold">{kopSettings.tanggalCetak}</span></div>
                   </div>
@@ -1230,32 +1560,32 @@ export default function HasilUjianPage() {
                 <table className="w-full text-xs border-collapse border border-gray-400 mb-6">
                   <thead>
                     <tr className="bg-gray-100 text-center font-bold text-gray-900">
-                      <th className="border border-gray-400 p-2 w-10">No</th>
-                      <th className="border border-gray-400 p-2 text-left">Nama Siswa</th>
-                      <th className="border border-gray-400 p-2 w-24">Kelas</th>
-                      <th className="border border-gray-400 p-2 text-left">Paket Soal</th>
-                      <th className="border border-gray-400 p-2 w-16">Nilai</th>
-                      <th className="border border-gray-400 p-2 w-20">Pelanggaran</th>
-                      <th className="border border-gray-400 p-2 w-28">Status Koreksi</th>
-                      <th className="border border-gray-400 p-2 w-24">Keterangan</th>
+                      <th style={{ width: '35px' }}>No</th>
+                      <th style={{ textAlign: 'left' }}>Nama Siswa</th>
+                      <th style={{ width: '85px' }}>Kelas</th>
+                      <th style={{ textAlign: 'left' }}>Paket Soal</th>
+                      <th style={{ width: '60px' }}>Nilai</th>
+                      <th style={{ width: '65px' }}>Pelanggaran</th>
+                      <th style={{ width: '90px' }}>Status Koreksi</th>
+                      <th style={{ width: '85px' }}>Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredHasil.length === 0 ? (
-                      <tr><td colSpan={8} className="p-4 text-center text-gray-500 border border-gray-400">Tidak ada data hasil.</td></tr>
+                      <tr><td colSpan={8} className="text-center text-gray-500">Tidak ada data hasil.</td></tr>
                     ) : (
                       filteredHasil.map((h, i) => {
                         const isTuntas = h.skor_akhir >= kopSettings.kkm;
                         return (
                           <tr key={h.id} className="text-gray-800">
-                            <td className="border border-gray-400 p-1.5 text-center">{i + 1}</td>
-                            <td className="border border-gray-400 p-1.5 font-bold">{h.users?.nama || '-'}</td>
-                            <td className="border border-gray-400 p-1.5 text-center">{kelasList.find(k => k.id === h.users?.kelas_id)?.nama_kelas || '-'}</td>
-                            <td className="border border-gray-400 p-1.5">{h.paket?.nama_paket || '-'}</td>
-                            <td className="border border-gray-400 p-1.5 text-center font-bold">{h.skor_akhir}</td>
-                            <td className="border border-gray-400 p-1.5 text-center">{h.cheat_count > 0 ? `${h.cheat_count}x` : '0'}</td>
-                            <td className="border border-gray-400 p-1.5 text-center">{h.status_koreksi}</td>
-                            <td className={`border border-gray-400 p-1.5 text-center font-bold ${isTuntas ? 'text-green-700' : 'text-red-600'}`}>
+                            <td className="text-center">{i + 1}</td>
+                            <td className="text-left font-bold">{h.users?.nama || '-'}</td>
+                            <td className="text-center">{kelasList.find(k => k.id === h.users?.kelas_id)?.nama_kelas || '-'}</td>
+                            <td className="text-left">{h.paket?.nama_paket || '-'}</td>
+                            <td className="text-center font-bold">{h.skor_akhir}</td>
+                            <td className="text-center">{h.cheat_count > 0 ? `${h.cheat_count}x` : '0'}</td>
+                            <td className="text-center">{h.status_koreksi}</td>
+                            <td className={`text-center font-bold ${isTuntas ? 'badge-tuntas text-green-700' : 'badge-remidial text-red-600'}`}>
                               {isTuntas ? 'TUNTAS' : 'REMIDIAL'}
                             </td>
                           </tr>
@@ -1266,29 +1596,29 @@ export default function HasilUjianPage() {
                 </table>
 
                 {/* 5. STATISTIK RINGKASAN */}
-                <div className="grid grid-cols-4 gap-2 text-xs border border-gray-300 p-3 rounded mb-8 bg-gray-50 text-center font-semibold">
-                  <div>Total Peserta: <span className="font-bold">{filteredHasil.length}</span></div>
-                  <div>Rata-rata Nilai: <span className="font-bold">{(filteredHasil.reduce((a, b) => a + (Number(b.skor_akhir) || 0), 0) / (filteredHasil.length || 1)).toFixed(1)}</span></div>
-                  <div>Nilai Tertinggi: <span className="font-bold">{filteredHasil.length > 0 ? Math.max(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
-                  <div>Nilai Terendah: <span className="font-bold">{filteredHasil.length > 0 ? Math.min(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
+                <div className="stats-container grid grid-cols-4 gap-2 text-xs border border-gray-300 p-3 rounded mb-8 bg-gray-50 text-center font-semibold">
+                  <div className="stats-item">Total Peserta: <span className="font-bold">{filteredHasil.length}</span></div>
+                  <div className="stats-item">Rata-rata Nilai: <span className="font-bold">{(filteredHasil.reduce((a, b) => a + (Number(b.skor_akhir) || 0), 0) / (filteredHasil.length || 1)).toFixed(1)}</span></div>
+                  <div className="stats-item">Nilai Tertinggi: <span className="font-bold">{filteredHasil.length > 0 ? Math.max(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
+                  <div className="stats-item">Nilai Terendah: <span className="font-bold">{filteredHasil.length > 0 ? Math.min(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
                 </div>
 
                 {/* 6. KOLOM TANDA TANGAN (HANYA JIKA pakaiKop === true) */}
                 {pakaiKop && (
-                  <div className="grid grid-cols-2 text-xs font-semibold text-gray-900 pt-4">
-                    <div className="text-center">
+                  <div className="ttd-container grid grid-cols-2 text-xs font-semibold text-gray-900 pt-4">
+                    <div className="ttd-box text-center">
                       <p>Mengetahui,</p>
                       <p className="font-bold">Kepala Sekolah / Penanggung Jawab CBT</p>
-                      <div className="h-20"></div>
-                      <p className="font-bold underline uppercase">{kopSettings.kepalaSekolah}</p>
-                      <p className="text-gray-600">{kopSettings.nipKepala ? `NIP. ${kopSettings.nipKepala}` : '-'}</p>
+                      <div className="ttd-space h-20"></div>
+                      <p className="ttd-nama font-bold underline uppercase">{kopSettings.kepalaSekolah}</p>
+                      <p className="ttd-nip text-gray-600">{kopSettings.nipKepala ? `NIP. ${kopSettings.nipKepala}` : '-'}</p>
                     </div>
-                    <div className="text-center">
+                    <div className="ttd-box text-center">
                       <p>{kopSettings.kota}, {kopSettings.tanggalCetak}</p>
                       <p className="font-bold">Guru Pengampu / Proktor CBT</p>
-                      <div className="h-20"></div>
-                      <p className="font-bold underline uppercase">{kopSettings.guruPengampu}</p>
-                      <p className="text-gray-600">{kopSettings.nipGuru ? `NIP. ${kopSettings.nipGuru}` : '-'}</p>
+                      <div className="ttd-space h-20"></div>
+                      <p className="ttd-nama font-bold underline uppercase">{kopSettings.guruPengampu}</p>
+                      <p className="ttd-nip text-gray-600">{kopSettings.nipGuru ? `NIP. ${kopSettings.nipGuru}` : '-'}</p>
                     </div>
                   </div>
                 )}
