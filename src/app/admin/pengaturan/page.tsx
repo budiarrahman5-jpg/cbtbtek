@@ -15,6 +15,8 @@ export default function PengaturanPage() {
     proteksi_layar: 'ON',
     kode_buka_blokir: 'BUKA123',
     groq_api_key: '',
+    gemini_api_key: '',
+    ai_provider: 'auto',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<any>(null);
@@ -239,21 +241,97 @@ export default function PengaturanPage() {
           </div>
         </div>
 
-        {/* AI Groq API Key */}
-        <div className="pt-4 border-t border-gray-200">
-          <label className="block font-bold text-sm mb-1 text-purple-700 flex items-center gap-2">
-            ✨ API Key AI (Groq AI) <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full border border-emerald-300 font-bold">Aktif & Siap Digunakan</span>
-          </label>
-          <input 
-            type="password" 
-            placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            value={settings.groq_api_key || ''} onChange={e=>handleChange('groq_api_key', e.target.value)}
-            className="w-full border-2 p-3 rounded-md focus:ring-purple-500 focus:border-purple-500 outline-none font-mono text-sm bg-purple-50 border-purple-100 placeholder:text-purple-300" 
-          />
-          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            API Key ini diperlukan untuk mengaktifkan fitur <strong>Koreksi Essay Otomatis</strong> dan <strong>Pembuat Soal AI</strong>. 
-            Kami sangat menyarankan <strong>Groq AI</strong> karena 100% Gratis, Kuota Sangat Besar, dan Jauh Lebih Cepat. Dapatkan gratis di <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-purple-600 font-bold underline">Groq Console</a>.
-          </p>
+        {/* MULTI-PROVIDER AI CONFIGURATION (GROQ + GOOGLE GEMINI) */}
+        <div className="pt-4 border-t border-gray-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-base text-purple-900 flex items-center gap-2">
+                ✨ Konfigurasi Kecerdasan Buatan (Groq AI & Google Gemini)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Gabungkan dua mesin AI sekaligus untuk kecepatan maksimal, kuota ganda, dan pencadangan otomatis (anti-macet).
+              </p>
+            </div>
+            <span className="self-start sm:self-auto bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-800 text-[11px] font-bold px-3 py-1 rounded-full border border-purple-200">
+              Multi-Provider Ready
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-bold text-xs uppercase tracking-wider text-slate-700 mb-1.5">
+              Mode Penyedia AI (AI Engine Priority)
+            </label>
+            <select
+              value={settings.ai_provider || 'auto'}
+              onChange={e => handleChange('ai_provider', e.target.value)}
+              className="w-full border-2 border-purple-200 p-3 rounded-lg bg-purple-50/60 focus:border-purple-600 outline-none font-bold text-sm text-purple-950"
+            >
+              <option value="auto">⚡ Otomatis (Rekomendasi: Groq Kilat + Cadangan Google Gemini)</option>
+              <option value="groq">🚀 Prioritaskan Groq AI</option>
+              <option value="gemini">🌟 Prioritaskan Google Gemini</option>
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Dalam mode <strong>Otomatis</strong>, sistem akan menggunakan Groq karena super cepat (~1-2 detik). Jika Groq sibuk atau kuota habis, sistem otomatis beralih ke Gemini tanpa error.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {/* Groq API Key */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <span>🚀 Groq API Key</span>
+                </label>
+                {settings.groq_api_key ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                    Tersimpan
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                    Belum Diisi
+                  </span>
+                )}
+              </div>
+              <input 
+                type="password" 
+                placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={settings.groq_api_key || ''} 
+                onChange={e => handleChange('groq_api_key', e.target.value)}
+                className="w-full border-2 p-2.5 rounded-lg focus:border-purple-500 outline-none font-mono text-xs bg-white border-slate-200 placeholder:text-slate-300" 
+              />
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Super cepat untuk buat soal massal. Dapatkan gratis di <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-purple-600 font-bold underline">Groq Console</a>.
+              </p>
+            </div>
+
+            {/* Google Gemini API Key */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <span>🌟 Google Gemini API Key</span>
+                </label>
+                {settings.gemini_api_key ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+                    Tersimpan
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                    Belum Diisi
+                  </span>
+                )}
+              </div>
+              <input 
+                type="password" 
+                placeholder="AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={settings.gemini_api_key || ''} 
+                onChange={e => handleChange('gemini_api_key', e.target.value)}
+                className="w-full border-2 p-2.5 rounded-lg focus:border-indigo-500 outline-none font-mono text-xs bg-white border-slate-200 placeholder:text-slate-300" 
+              />
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Didukung Google AI (Gemini Flash). Dapatkan gratis di <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline">Google AI Studio</a>.
+              </p>
+            </div>
+          </div>
         </div>
 
         <button 

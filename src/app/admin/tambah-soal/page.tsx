@@ -355,7 +355,7 @@ export default function TambahSoalPage() {
       
       if (!res.ok) {
         if (data.error === 'API_KEY_MISSING') {
-          alert('API Key Groq AI belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
+          alert('API Key AI (Groq AI atau Google Gemini) belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
           setShowAIModal(false);
         } else {
           alert('Gagal generate soal: ' + data.error);
@@ -415,7 +415,7 @@ export default function TambahSoalPage() {
       
       setShowAIModal(false);
       setAiPrompt('');
-      alert(`Soal ${targetTipe} berhasil dibuat oleh AI beserta pilihan jawaban dan kunci!`);
+      alert(`Soal ${targetTipe} berhasil dibuat oleh ${data.provider || 'AI'} beserta pilihan jawaban dan kunci!`);
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi saat memanggil AI.');

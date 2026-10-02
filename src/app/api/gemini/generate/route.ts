@@ -169,16 +169,135 @@ function cleanAndParseJSON(text: string): any {
   }
 }
 
+async function callGroq(apiKey: string, systemInstruction: string, fullPrompt: string): Promise<string> {
+  let activeModel = 'openai/gpt-oss-120b';
+  try {
+    const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (modelsRes.ok) {
+      const modelsData = await modelsRes.json();
+      const isInvalid = (id: string) => {
+        const lower = (id || '').toLowerCase();
+        return lower.includes('guard') || 
+               lower.includes('safeguard') || 
+               lower.includes('whisper') || 
+               lower.includes('vision') || 
+               lower.includes('audio') || 
+               lower.includes('embed');
+      };
+      const validModels: string[] = (modelsData.data || [])
+        .filter((m: any) => !isInvalid(m.id))
+        .map((m: any) => m.id);
+
+      const priorities = [
+        'openai/gpt-oss-120b',
+        'llama-3.3-70b-versatile',
+        'llama-3.1-70b-versatile',
+        'qwen/qwen3.8-27b',
+        'openai/gpt-oss-20b',
+        'llama-3.1-8b-instant',
+        'llama3-70b-8192',
+        'llama3-8b-8192',
+        'mixtral-8x7b-32768',
+        'allam-2-7b'
+      ];
+      const matched = priorities.find(p => validModels.includes(p));
+      activeModel = matched || validModels[0] || activeModel;
+    }
+  } catch (e) {
+    console.warn("Gagal auto-detect model Groq, gunakan default:", e);
+  }
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: activeModel,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: fullPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 8192,
+      temperature: 0.6
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Gagal memanggil Groq AI');
+  }
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callGemini(apiKey: string, systemInstruction: string, fullPrompt: string): Promise<string> {
+  const candidateModels = [
+    'gemini-flash-lite-latest',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
+    'gemini-3.7-flash',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-pro-latest'
+  ];
+
+  let lastError = '';
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: `${systemInstruction}\n\n${fullPrompt}` }]
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.6,
+            maxOutputTokens: 8192
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } else {
+        lastError = data.error?.message || `HTTP ${response.status}`;
+      }
+    } catch (e: any) {
+      lastError = e.message;
+    }
+  }
+
+  throw new Error(`Semua model Google Gemini gagal diakses: ${lastError}`);
+}
+
 export async function POST(req: Request) {
   try {
     let { prompt, tipe, jumlah = 1 } = await req.json();
     const count = Math.max(1, Math.min(30, Number(jumlah) || 1));
 
     // 1. Ambil API Key dari Supabase
-    const { data: pengaturan } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'groq_api_key').single();
-    const apiKey = pengaturan?.nilai?.trim();
+    const { data: pengaturanList } = await supabase
+      .from('pengaturan')
+      .select('kunci, nilai')
+      .in('kunci', ['groq_api_key', 'gemini_api_key', 'ai_provider']);
 
-    if (!apiKey || apiKey.trim() === '') {
+    const settingsMap: Record<string, string> = {};
+    (pengaturanList || []).forEach(p => { settingsMap[p.kunci] = p.nilai?.trim() || ''; });
+
+    const groqKey = settingsMap['groq_api_key'] || '';
+    const geminiKey = settingsMap['gemini_api_key'] || '';
+    const aiProvider = settingsMap['ai_provider'] || 'auto';
+
+    if (!groqKey && !geminiKey) {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });
     }
 
@@ -265,76 +384,56 @@ Format JSON yang diharapkan:
       fullPrompt = `Tipe Soal: ${tipe}\nInstruksi: ${prompt}`;
     }
 
-    // 3. Ambil daftar model aktif dari Groq
-    let activeModel = 'openai/gpt-oss-120b'; // Fallback
-    try {
-      const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      });
-      if (modelsRes.ok) {
-        const modelsData = await modelsRes.json();
-        const isInvalid = (id: string) => {
-          const lower = (id || '').toLowerCase();
-          return lower.includes('guard') || 
-                 lower.includes('safeguard') || 
-                 lower.includes('whisper') || 
-                 lower.includes('vision') || 
-                 lower.includes('audio') || 
-                 lower.includes('embed');
-        };
+    // 3. Eksekusi AI dengan Multi-Provider & Auto-Fallback
+    let text = '';
+    let usedProvider = '';
 
-        const validModels: string[] = (modelsData.data || [])
-          .filter((m: any) => !isInvalid(m.id))
-          .map((m: any) => m.id);
+    const executeGroq = async () => {
+      if (!groqKey) throw new Error('Groq API Key belum diatur di Pengaturan');
+      const t = await callGroq(groqKey, systemInstruction, fullPrompt);
+      return { text: t, provider: 'Groq AI' };
+    };
 
-        const priorities = [
-          'openai/gpt-oss-120b',
-          'llama-3.3-70b-versatile',
-          'llama-3.1-70b-versatile',
-          'qwen/qwen3.8-27b',
-          'openai/gpt-oss-20b',
-          'llama-3.1-8b-instant',
-          'llama3-70b-8192',
-          'llama3-8b-8192',
-          'mixtral-8x7b-32768',
-          'allam-2-7b'
-        ];
+    const executeGemini = async () => {
+      if (!geminiKey) throw new Error('Google Gemini API Key belum diatur di Pengaturan');
+      const t = await callGemini(geminiKey, systemInstruction, fullPrompt);
+      return { text: t, provider: 'Google Gemini' };
+    };
 
-        const matched = priorities.find(p => validModels.includes(p));
-        activeModel = matched || validModels[0] || activeModel;
+    if (aiProvider === 'gemini') {
+      try {
+        const res = await executeGemini();
+        text = res.text;
+        usedProvider = res.provider;
+      } catch (err: any) {
+        console.warn('Google Gemini gagal, beralih ke Groq AI:', err.message);
+        if (groqKey) {
+          const res = await executeGroq();
+          text = res.text;
+          usedProvider = `${res.provider} (Cadangan)`;
+        } else {
+          return NextResponse.json({ error: `Gagal memanggil Google Gemini: ${err.message}` }, { status: 500 });
+        }
       }
-    } catch (e) {
-      console.warn("Gagal mengambil list model Groq, menggunakan fallback:", e);
-    }
-
-    // 4. Panggil Groq API
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: activeModel,
-        messages: [
-          { role: 'system', content: systemInstruction },
-          { role: 'user', content: fullPrompt }
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 8192,
-        temperature: 0.6
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("Groq API Error Response:", data);
-      return NextResponse.json({ error: data.error?.message || 'Gagal memanggil Groq AI' }, { status: response.status });
+    } else {
+      // Default: 'auto' atau 'groq'
+      try {
+        const res = await executeGroq();
+        text = res.text;
+        usedProvider = res.provider;
+      } catch (err: any) {
+        console.warn('Groq AI gagal, beralih ke Google Gemini:', err.message);
+        if (geminiKey) {
+          const res = await executeGemini();
+          text = res.text;
+          usedProvider = `${res.provider} (Cadangan)`;
+        } else {
+          return NextResponse.json({ error: `Gagal memanggil Groq AI: ${err.message}` }, { status: 500 });
+        }
+      }
     }
     
-    // 5. Ekstrak & Parse JSON secara aman dan tahan error
-    const text = data.choices?.[0]?.message?.content || '';
+    // 4. Ekstrak & Parse JSON secara aman dan tahan error
     let parsedResult: any = cleanAndParseJSON(text);
 
     if (!parsedResult) {
@@ -356,7 +455,7 @@ Format JSON yang diharapkan:
       }
     }
 
-    // 6. Normalisasi Respon
+    // 5. Normalisasi Respon
     if (count > 1) {
       // Ambil array soal dari berbagai kemungkinan struktur JSON AI
       let rawList: any[] = [];
@@ -390,6 +489,7 @@ Format JSON yang diharapkan:
         result: normalizedList, 
         is_bulk: true, 
         count: normalizedList.length, 
+        provider: usedProvider,
         tipe 
       });
 
@@ -399,12 +499,13 @@ Format JSON yang diharapkan:
       return NextResponse.json({ 
         result: normalized, 
         is_bulk: false, 
+        provider: usedProvider,
         tipe 
       });
     }
 
   } catch (error: any) {
-    console.error('Groq Generate API Error:', error);
+    console.error('Generate API Error:', error);
     return NextResponse.json({ error: error.message || 'Terjadi kesalahan internal server.' }, { status: 500 });
   }
 }
