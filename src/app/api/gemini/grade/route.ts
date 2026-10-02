@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    let { paket_id, hasil_id } = await req.json();
+    let { paket_id, hasil_id, provider } = await req.json();
 
     if (!paket_id && !hasil_id) {
       return NextResponse.json({ error: 'ID Paket atau ID Hasil tidak valid.' }, { status: 400 });
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
     const groqKey = settingsMap['groq_api_key'] || '';
     const geminiKey = settingsMap['gemini_api_key'] || '';
-    const aiProvider = settingsMap['ai_provider'] || 'auto';
+    const aiProvider = provider || settingsMap['ai_provider'] || 'auto';
 
     if (!groqKey && !geminiKey) {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });

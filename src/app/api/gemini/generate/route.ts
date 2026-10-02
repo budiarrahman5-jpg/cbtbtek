@@ -281,7 +281,7 @@ async function callGemini(apiKey: string, systemInstruction: string, fullPrompt:
 
 export async function POST(req: Request) {
   try {
-    let { prompt, tipe, jumlah = 1 } = await req.json();
+    let { prompt, tipe, jumlah = 1, provider } = await req.json();
     const count = Math.max(1, Math.min(30, Number(jumlah) || 1));
 
     // 1. Ambil API Key dari Supabase
@@ -295,7 +295,7 @@ export async function POST(req: Request) {
 
     const groqKey = settingsMap['groq_api_key'] || '';
     const geminiKey = settingsMap['gemini_api_key'] || '';
-    const aiProvider = settingsMap['ai_provider'] || 'auto';
+    const aiProvider = provider || settingsMap['ai_provider'] || 'auto';
 
     if (!groqKey && !geminiKey) {
       return NextResponse.json({ error: 'API_KEY_MISSING' }, { status: 400 });

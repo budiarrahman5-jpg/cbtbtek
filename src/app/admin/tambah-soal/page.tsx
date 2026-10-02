@@ -52,6 +52,7 @@ export default function TambahSoalPage() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiJumlah, setAiJumlah] = useState<number>(1);
+  const [aiProvider, setAiProvider] = useState<'auto' | 'groq' | 'gemini'>('auto');
   const [isAILoading, setIsAILoading] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
 
@@ -348,7 +349,7 @@ export default function TambahSoalPage() {
       const res = await fetch('/api/gemini/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt, tipe: tipe, jumlah: aiJumlah })
+        body: JSON.stringify({ prompt: aiPrompt, tipe: tipe, jumlah: aiJumlah, provider: aiProvider })
       });
       
       const data = await res.json();
@@ -771,6 +772,26 @@ export default function TambahSoalPage() {
               <button onClick={() => setShowAIModal(false)} className="text-slate-400 hover:text-red-500 transition-colors">
                 <X size={24} />
               </button>
+            </div>
+
+            {/* Pilihan Mesin AI */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Pilih Mesin AI:</span>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full border border-indigo-200">
+                  {aiProvider === 'auto' ? '⚡ Groq + Gemini' : aiProvider === 'groq' ? '🚀 Groq AI' : '🌟 Google Gemini'}
+                </span>
+              </label>
+              <select
+                value={aiProvider}
+                onChange={(e) => setAiProvider(e.target.value as any)}
+                disabled={isAILoading}
+                className="w-full border-2 border-indigo-200 rounded-xl p-2.5 font-bold text-xs bg-indigo-50/70 text-indigo-950 focus:border-indigo-500 outline-none transition-all"
+              >
+                <option value="auto">⚡ Otomatis (Rekomendasi: Groq Kilat + Cadangan Gemini)</option>
+                <option value="groq">🚀 Groq AI (Super Cepat ~1-2 Detik)</option>
+                <option value="gemini">🌟 Google Gemini (Akurat & Luas)</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">

@@ -22,6 +22,9 @@ export default function HasilUjianPage() {
   });
   const [skorManual, setSkorManual] = useState<Record<string, number>>({});
   const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);
+  const [showKoreksiPaketModal, setShowKoreksiPaketModal] = useState(false);
+  const [koreksiAiEngine, setKoreksiAiEngine] = useState<'auto' | 'groq' | 'gemini'>('auto');
+  const [koreksiSiswaAiEngine, setKoreksiSiswaAiEngine] = useState<'auto' | 'groq' | 'gemini'>('auto');
 
   // State Seleksi Siswa & Ubah Status Koreksi Massal
   const [selectedHasilIds, setSelectedHasilIds] = useState<string[]>([]);
@@ -187,31 +190,30 @@ export default function HasilUjianPage() {
     }
   };
 
-  const handleKoreksiAI = async () => {
+  const handleKoreksiAI = async (engine = koreksiAiEngine) => {
     if (selectedPaket === 'ALL') {
       return alert('Pilih satu paket spesifik terlebih dahulu untuk dikoreksi otomatis.');
     }
     
-    if (!confirm('AI akan mengoreksi dan memberikan nilai untuk semua jawaban Essay/Isian yang masih belum dinilai di paket ini. Lanjutkan?')) return;
-    
     setIsAILoading(true);
+    setShowKoreksiPaketModal(false);
     try {
       const res = await fetch('/api/gemini/grade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paket_id: selectedPaket })
+        body: JSON.stringify({ paket_id: selectedPaket, provider: engine })
       });
       
       const data = await res.json();
       
       if (!res.ok) {
         if (data.error === 'API_KEY_MISSING') {
-          alert('API Key Groq AI belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
+          alert('API Key AI (Groq AI atau Google Gemini) belum diatur! Silakan atur di menu Pengaturan terlebih dahulu.');
         } else {
           alert('Gagal koreksi AI: ' + data.error);
         }
       } else {
-        alert(`Berhasil! AI telah mengoreksi ${data.updated} soal essay/isian.`);
+        alert(`🎉 Berhasil! AI telah mengoreksi ${data.updated} butir soal essay/isian pada paket ini.`);
         fetchHasil(); // Refresh data
       }
     } catch (err) {
@@ -223,19 +225,19 @@ export default function HasilUjianPage() {
 
   const [isAILoadingSiswa, setIsAILoadingSiswa] = useState(false);
 
-  const handleKoreksiAISiswa = async () => {
+  const handleKoreksiAISiswa = async (engine = koreksiSiswaAiEngine) => {
     if (!modalKoreksi.data) return;
     setIsAILoadingSiswa(true);
     try {
       const res = await fetch('/api/gemini/grade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hasil_id: modalKoreksi.data.id })
+        body: JSON.stringify({ hasil_id: modalKoreksi.data.id, provider: engine })
       });
       const data = await res.json();
       if (!res.ok) {
         if (data.error === 'API_KEY_MISSING') {
-          alert('API Key Groq AI belum diatur di menu Pengaturan!');
+          alert('API Key AI (Groq AI atau Google Gemini) belum diatur di menu Pengaturan!');
         } else {
           alert('Gagal koreksi AI: ' + data.error);
         }
@@ -257,7 +259,7 @@ export default function HasilUjianPage() {
             }
           }));
         }
-        alert(`Berhasil! Groq AI telah mengoreksi ${data.updated} soal essay/isian untuk siswa ini. Skor otomatis telah diisikan ke kotak penilaian.`);
+        alert(`🎉 Berhasil! AI telah mengoreksi ${data.updated} butir soal essay/isian untuk siswa ini. Skor otomatis telah terisi.`);
         fetchHasil();
       }
     } catch (err) {
@@ -555,10 +557,10 @@ export default function HasilUjianPage() {
           </h2>
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <button 
-              onClick={handleKoreksiAI}
+              onClick={() => setShowKoreksiPaketModal(true)}
               disabled={isAILoading || selectedPaket === 'ALL'}
               className="flex-1 md:flex-none bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-md active:scale-95"
-              title={selectedPaket === 'ALL' ? 'Pilih satu paket ujian terlebih dahulu untuk koreksi otomatis' : 'Koreksi Otomatis Soal Essay/Isian dengan Groq AI'}
+              title={selectedPaket === 'ALL' ? 'Pilih satu paket ujian terlebih dahulu untuk koreksi otomatis' : 'Koreksi Otomatis Soal Essay/Isian dengan AI'}
             >
               <Sparkles size={18} className={isAILoading ? 'animate-spin' : 'animate-pulse'} /> 
               <span className="hidden md:inline">{isAILoading ? 'AI Sedang Mengoreksi...' : 'Koreksi Essay AI'}</span>
@@ -772,15 +774,29 @@ export default function HasilUjianPage() {
                 </h3>
                 <p className="text-sm text-slate-500 font-medium mt-1">Peserta: <span className="text-indigo-600 font-bold">{modalKoreksi.data.users?.nama}</span></p>
               </div>
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-inner">
+                  <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Mesin AI:</span>
+                  <select
+                    value={koreksiSiswaAiEngine}
+                    onChange={(e) => setKoreksiSiswaAiEngine(e.target.value as any)}
+                    disabled={isAILoadingSiswa}
+                    className="bg-transparent text-xs font-black text-indigo-700 outline-none cursor-pointer"
+                  >
+                    <option value="auto">⚡ Otomatis (Groq + Gemini)</option>
+                    <option value="groq">🚀 Groq AI</option>
+                    <option value="gemini">🌟 Google Gemini</option>
+                  </select>
+                </div>
+
                 <button
-                  onClick={handleKoreksiAISiswa}
+                  onClick={() => handleKoreksiAISiswa(koreksiSiswaAiEngine)}
                   disabled={isAILoadingSiswa}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
-                  title="Gunakan Groq AI untuk menilai seluruh jawaban essay/isian murid ini secara otomatis"
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
+                  title="Gunakan AI yang dipilih untuk menilai seluruh jawaban essay/isian murid ini secara otomatis"
                 >
                   <Sparkles size={16} className={isAILoadingSiswa ? "animate-spin" : "animate-pulse"} />
-                  <span>{isAILoadingSiswa ? "AI Sedang Menilai..." : "✨ Koreksi AI Murid Ini"}</span>
+                  <span>{isAILoadingSiswa ? "Menilai..." : "✨ Koreksi AI Murid Ini"}</span>
                 </button>
                 <button onClick={() => setModalKoreksi({ isOpen: false, data: null, soalList: [] })} className="text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-colors">
                   ✕
@@ -1277,6 +1293,81 @@ export default function HasilUjianPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL PILIH MESIN AI UNTUK KOREKSI PAKET */}
+      {showKoreksiPaketModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 border-t-4 border-purple-600 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+                <Sparkles className="text-purple-600" /> Koreksi Essay Otomatis AI
+              </h3>
+              <button 
+                onClick={() => setShowKoreksiPaketModal(false)}
+                className="text-slate-400 hover:text-red-500 transition-colors font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
+              AI akan menilai seluruh jawaban essay/isian siswa pada paket <strong>{paketList.find(p => p.id === selectedPaket)?.nama_paket || 'yang dipilih'}</strong> secara otomatis dan proporsional.
+            </p>
+
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Pilih Mesin AI yang Digunakan:
+              </label>
+              <div className="space-y-2">
+                {[
+                  { id: 'auto', label: '⚡ Otomatis (Rekomendasi)', desc: 'Groq super cepat + Google Gemini cadangan otomatis' },
+                  { id: 'groq', label: '🚀 Groq AI Saja', desc: 'Pemrosesan super kilat (~1-2 detik)' },
+                  { id: 'gemini', label: '🌟 Google Gemini Saja', desc: 'Analisis mendalam & bahasa alami akurat' },
+                ].map((opt) => (
+                  <label
+                    key={opt.id}
+                    onClick={() => setKoreksiAiEngine(opt.id as any)}
+                    className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      koreksiAiEngine === opt.id
+                        ? 'border-purple-600 bg-purple-50/70 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="koreksi_engine"
+                      checked={koreksiAiEngine === opt.id}
+                      onChange={() => setKoreksiAiEngine(opt.id as any)}
+                      className="mt-0.5 text-purple-600 focus:ring-purple-500"
+                    />
+                    <div>
+                      <div className="font-bold text-xs text-slate-800">{opt.label}</div>
+                      <div className="text-[11px] text-slate-500">{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowKoreksiPaketModal(false)}
+                disabled={isAILoading}
+                className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-lg text-xs transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => handleKoreksiAI(koreksiAiEngine)}
+                disabled={isAILoading}
+                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md text-xs flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles size={14} className={isAILoading ? 'animate-spin' : ''} />
+                {isAILoading ? 'Sedang Mengoreksi...' : 'Mulai Koreksi Sekarang'}
+              </button>
             </div>
           </div>
         </div>
