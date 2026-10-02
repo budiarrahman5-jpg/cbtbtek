@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X, Image as ImageIcon, Upload, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function HasilUjianPage() {
@@ -23,8 +23,9 @@ export default function HasilUjianPage() {
   const [skorManual, setSkorManual] = useState<Record<string, number>>({});
   const [isSavingKoreksi, setIsSavingKoreksi] = useState(false);
   
-  // State Cetak PDF Ber-Kop Surat
+  // State Cetak PDF (Pilihan Kop Resmi vs Tanpa Kop)
   const [modalPrintPDF, setModalPrintPDF] = useState(false);
+  const [pakaiKop, setPakaiKop] = useState<boolean>(true);
   const [kopSettings, setKopSettings] = useState({
     instansiAtas: 'PEMERINTAH DAERAH PROVINSI / KABUPATEN',
     dinas: 'DINAS PENDIDIKAN DAN KEBUDAYAAN',
@@ -36,8 +37,52 @@ export default function HasilUjianPage() {
     nipKepala: '19750101 200003 1 001',
     guruPengampu: 'Guru Pengampu / Proktor CBT',
     nipGuru: '19820515 200801 1 005',
-    kkm: 75
+    kkm: 75,
+    logoUrl: ''
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Muat preferensi kop tersimpan dari localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('cbt_kop_pdf_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.pakaiKop !== undefined) setPakaiKop(parsed.pakaiKop);
+        setKopSettings(prev => ({ ...prev, ...parsed }));
+      }
+    } catch(e) {}
+  }, []);
+
+  const updateKopSettings = (newSettings: any, newPakaiKop?: boolean) => {
+    const isPakai = newPakaiKop !== undefined ? newPakaiKop : pakaiKop;
+    setKopSettings(newSettings);
+    if (newPakaiKop !== undefined) setPakaiKop(newPakaiKop);
+    try {
+      localStorage.setItem('cbt_kop_pdf_settings', JSON.stringify({ ...newSettings, pakaiKop: isPakai }));
+    } catch(e) {}
+  };
+
+  const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Ukuran file logo maksimal 2MB!');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        updateKopSettings({ ...kopSettings, logoUrl: base64 });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleHapusLogo = () => {
+    updateKopSettings({ ...kopSettings, logoUrl: '' });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   useEffect(() => {
     fetchFilters();
@@ -477,9 +522,9 @@ export default function HasilUjianPage() {
             <button 
               onClick={() => setModalPrintPDF(true)}
               className="flex-1 md:flex-none bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded font-bold flex items-center justify-center gap-2 transition shadow-sm"
-              title="Cetak Laporan Resmi Ber-Kop Surat / Simpan ke PDF"
+              title="Cetak Laporan Hasil Ujian / Simpan ke PDF"
             >
-              <Printer size={18} /> <span className="hidden md:inline">Cetak / PDF (Kop Resmi)</span>
+              <Printer size={18} /> <span className="hidden md:inline">Cetak / PDF Laporan</span>
             </button>
           </div>
         </div>
@@ -715,7 +760,7 @@ export default function HasilUjianPage() {
         </div>
       )}
 
-      {/* Modal Cetak PDF / Laporan Resmi Ber-Kop Surat */}
+      {/* Modal Cetak PDF / Laporan Hasil Ujian */}
       {modalPrintPDF && (
         <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 md:p-6 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden">
@@ -726,8 +771,12 @@ export default function HasilUjianPage() {
                   <Printer size={22} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-lg text-slate-800">Cetak Laporan Hasil Ujian (Kop Surat Resmi)</h3>
-                  <p className="text-xs text-slate-500">Pratinjau cetak A4 ber-Kop Surat resmi untuk diunduh sebagai PDF atau dicetak langsung.</p>
+                  <h3 className="font-extrabold text-lg text-slate-800">
+                    Cetak Laporan Hasil Ujian {pakaiKop ? '(Kop Surat Resmi)' : '(Format Standar / Tanpa Kop)'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Pratinjau cetak A4 untuk diunduh sebagai PDF atau dicetak langsung.
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -748,86 +797,285 @@ export default function HasilUjianPage() {
 
             {/* Modal Body / Scrollable Area */}
             <div className="p-6 overflow-y-auto flex-grow bg-slate-100/60 custom-scrollbar">
-              {/* Form Pengaturan Kop Cepat (No Print) */}
-              <div className="mb-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print space-y-3">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText size={14} className="text-indigo-600" /> Kustomisasi Identitas Kop Surat & Penandatangan
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">Nama Lembaga / Sekolah</label>
-                    <input 
-                      type="text" 
-                      value={kopSettings.namaSekolah} 
-                      onChange={e => setKopSettings({...kopSettings, namaSekolah: e.target.value})}
-                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">Dinas / Kementerian</label>
-                    <input 
-                      type="text" 
-                      value={kopSettings.dinas} 
-                      onChange={e => setKopSettings({...kopSettings, dinas: e.target.value})}
-                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">Alamat Lembaga</label>
-                    <input 
-                      type="text" 
-                      value={kopSettings.alamat} 
-                      onChange={e => setKopSettings({...kopSettings, alamat: e.target.value})}
-                      className="w-full border rounded-lg p-2 font-semibold text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-600 font-bold mb-1">Kota & Tanggal Cetak</label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={kopSettings.kota} 
-                        onChange={e => setKopSettings({...kopSettings, kota: e.target.value})}
-                        className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
-                      />
-                      <input 
-                        type="text" 
-                        value={kopSettings.tanggalCetak} 
-                        onChange={e => setKopSettings({...kopSettings, tanggalCetak: e.target.value})}
-                        className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
-                      />
+              {/* Form Opsi & Kustomisasi (No Print) */}
+              <div className="mb-6 bg-white p-5 rounded-xl border border-slate-200 shadow-sm no-print space-y-4">
+                {/* PILIHAN FORMAT: KOP RESMI VS TANPA KOP */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <FileText size={18} className="text-indigo-600" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800">Pilihan Tampilan Dokumen</h4>
+                      <p className="text-xs text-slate-500">Tentukan apakah ingin menyertakan Kop Surat & Tanda Tangan atau hanya Judul.</p>
                     </div>
                   </div>
+
+                  <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => updateKopSettings(kopSettings, true)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                        pakaiKop 
+                          ? 'bg-indigo-600 text-white shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <CheckCircle2 size={14} className={pakaiKop ? 'inline' : 'hidden'} />
+                      Pakai Kop Resmi (Lengkap)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateKopSettings(kopSettings, false)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                        !pakaiKop 
+                          ? 'bg-indigo-600 text-white shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <CheckCircle2 size={14} className={!pakaiKop ? 'inline' : 'hidden'} />
+                      Tanpa Kop Resmi (Hanya Judul)
+                    </button>
+                  </div>
                 </div>
+
+                {/* FORM KUSTOMISASI: JIKA PAKAI KOP RESMI */}
+                {pakaiKop ? (
+                  <div className="space-y-4">
+                    {/* Baris 1: Logo & Info Sekolah */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                      {/* Upload / Ganti Logo */}
+                      <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col items-center justify-center text-center">
+                        <label className="text-[11px] font-bold text-slate-600 uppercase mb-2">Logo Resmi Sekolah</label>
+                        <div className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden mb-2 shadow-sm">
+                          {kopSettings.logoUrl ? (
+                            <img src={kopSettings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                          ) : (
+                            <ImageIcon size={24} className="text-slate-400" />
+                          )}
+                        </div>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          onChange={handleUploadLogo} 
+                          accept="image/*" 
+                          className="hidden" 
+                        />
+                        <div className="flex gap-1.5 w-full">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-1 px-2 rounded-lg flex items-center justify-center gap-1 transition"
+                          >
+                            <Upload size={12} /> {kopSettings.logoUrl ? 'Ganti' : 'Upload'}
+                          </button>
+                          {kopSettings.logoUrl && (
+                            <button
+                              type="button"
+                              onClick={handleHapusLogo}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold py-1 px-2 rounded-lg transition"
+                              title="Hapus Logo"
+                            >
+                              Hapus
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Nama Lembaga, Dinas, Alamat */}
+                      <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <label className="block text-slate-600 font-bold mb-1">Nama Lembaga / Sekolah</label>
+                          <input 
+                            type="text" 
+                            value={kopSettings.namaSekolah} 
+                            onChange={e => updateKopSettings({...kopSettings, namaSekolah: e.target.value})}
+                            className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-600 font-bold mb-1">Dinas / Kementerian</label>
+                          <input 
+                            type="text" 
+                            value={kopSettings.dinas} 
+                            onChange={e => updateKopSettings({...kopSettings, dinas: e.target.value})}
+                            className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-600 font-bold mb-1">Instansi Induk (Atas)</label>
+                          <input 
+                            type="text" 
+                            value={kopSettings.instansiAtas} 
+                            onChange={e => updateKopSettings({...kopSettings, instansiAtas: e.target.value})}
+                            className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-slate-600 font-bold mb-1">Alamat Lembaga & Kontak</label>
+                          <input 
+                            type="text" 
+                            value={kopSettings.alamat} 
+                            onChange={e => updateKopSettings({...kopSettings, alamat: e.target.value})}
+                            className="w-full border rounded-lg p-2 font-semibold text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-600 font-bold mb-1">Kota & Tanggal Cetak</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              value={kopSettings.kota} 
+                              onChange={e => updateKopSettings({...kopSettings, kota: e.target.value})}
+                              className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
+                              placeholder="Kota"
+                            />
+                            <input 
+                              type="text" 
+                              value={kopSettings.tanggalCetak} 
+                              onChange={e => updateKopSettings({...kopSettings, tanggalCetak: e.target.value})}
+                              className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800"
+                              placeholder="Tanggal"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Baris 2: Kepala Sekolah & Guru Pengampu (Penandatangan) */}
+                    <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <div>
+                        <label className="block text-slate-600 font-bold mb-1">Nama Kepala Sekolah</label>
+                        <input 
+                          type="text" 
+                          value={kopSettings.kepalaSekolah} 
+                          onChange={e => updateKopSettings({...kopSettings, kepalaSekolah: e.target.value})}
+                          className="w-full border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                          placeholder="Nama & Gelar"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-600 font-bold mb-1">NIP Kepala Sekolah</label>
+                        <input 
+                          type="text" 
+                          value={kopSettings.nipKepala} 
+                          onChange={e => updateKopSettings({...kopSettings, nipKepala: e.target.value})}
+                          className="w-full border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                          placeholder="Nomor Induk Pegawai"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-600 font-bold mb-1">Nama Guru Pengampu / Proktor</label>
+                        <input 
+                          type="text" 
+                          value={kopSettings.guruPengampu} 
+                          onChange={e => updateKopSettings({...kopSettings, guruPengampu: e.target.value})}
+                          className="w-full border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                          placeholder="Nama & Gelar"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-600 font-bold mb-1">NIP Guru Pengampu</label>
+                        <input 
+                          type="text" 
+                          value={kopSettings.nipGuru} 
+                          onChange={e => updateKopSettings({...kopSettings, nipGuru: e.target.value})}
+                          className="w-full border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                          placeholder="Nomor Induk Pegawai"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* FORM JIKA TANPA KOP RESMI */
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-amber-50/50 p-3 rounded-xl border border-amber-200">
+                    <div>
+                      <label className="block text-slate-600 font-bold mb-1">Nama Sekolah / Lembaga</label>
+                      <input 
+                        type="text" 
+                        value={kopSettings.namaSekolah} 
+                        onChange={e => updateKopSettings({...kopSettings, namaSekolah: e.target.value})}
+                        className="w-full border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-600 font-bold mb-1">Kota & Tanggal Cetak</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={kopSettings.kota} 
+                          onChange={e => updateKopSettings({...kopSettings, kota: e.target.value})}
+                          className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                        />
+                        <input 
+                          type="text" 
+                          value={kopSettings.tanggalCetak} 
+                          onChange={e => updateKopSettings({...kopSettings, tanggalCetak: e.target.value})}
+                          className="w-1/2 border rounded-lg p-2 font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center text-xs text-amber-800 font-medium">
+                      ℹ️ Format Standar: Hanya menampilkan judul laporan, tanggal, tabel nilai, dan statistik. Tidak menampilkan logo dan kolom tanda tangan.
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* DOKUMEN RESMI BER-KOP (Print Area) */}
+              {/* DOKUMEN CETAK (Print Area) */}
               <div id="printKopArea" className="bg-white p-8 md:p-12 rounded-xl shadow-lg border border-slate-200 max-w-4xl mx-auto print-document text-black">
-                {/* KOP SURAT RESMI */}
-                <div className="flex items-center gap-6 border-b-4 border-double border-black pb-4 mb-6">
-                  <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center border-2 border-dashed border-gray-400 rounded-lg text-gray-400 p-2 text-center text-[10px] font-bold">
-                    LOGO RESMI
-                  </div>
-                  <div className="flex-1 text-center">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700">{kopSettings.instansiAtas}</h4>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800">{kopSettings.dinas}</h3>
-                    <h2 className="text-xl font-black uppercase text-black tracking-tight">{kopSettings.namaSekolah}</h2>
-                    <p className="text-xs text-gray-600 mt-1">{kopSettings.alamat}</p>
-                  </div>
-                  <div className="w-20 h-20 flex-shrink-0 opacity-0"></div>
-                </div>
+                {/* 1. KOP SURAT RESMI (HANYA DITAMPILKAN JIKA pakaiKop === true) */}
+                {pakaiKop && (
+                  <div className="flex items-center gap-6 border-b-4 border-double border-black pb-4 mb-6">
+                    {/* Logo Sekolah */}
+                    <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center">
+                      {kopSettings.logoUrl ? (
+                        <img src={kopSettings.logoUrl} alt="Logo Sekolah" className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <div className="w-16 h-16 border-2 border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center text-gray-400 p-1 text-center text-[9px] font-bold">
+                          <span>LOGO</span>
+                          <span>SEKOLAH</span>
+                        </div>
+                      )}
+                    </div>
 
-                {/* JUDUL LAPORAN */}
-                <div className="text-center mb-6">
-                  <h3 className="text-base font-extrabold uppercase tracking-wide underline underline-offset-4">
-                    LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
-                  </h3>
-                  <p className="text-xs font-semibold text-gray-600 mt-1">
-                    TAHUN PELAJARAN {new Date().getFullYear()} / {new Date().getFullYear() + 1}
-                  </p>
-                </div>
+                    {/* Identitas Instansi & Sekolah */}
+                    <div className="flex-1 text-center">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700">{kopSettings.instansiAtas}</h4>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-gray-800">{kopSettings.dinas}</h3>
+                      <h2 className="text-xl font-black uppercase text-black tracking-tight">{kopSettings.namaSekolah}</h2>
+                      <p className="text-xs text-gray-600 mt-1">{kopSettings.alamat}</p>
+                    </div>
 
-                {/* IDENTITAS UJIAN */}
+                    {/* Spacer agar posisi tengah simetris */}
+                    <div className="w-20 h-20 flex-shrink-0 opacity-0 hidden sm:block"></div>
+                  </div>
+                )}
+
+                {/* 2. JUDUL LAPORAN */}
+                {pakaiKop ? (
+                  <div className="text-center mb-6">
+                    <h3 className="text-base font-extrabold uppercase tracking-wide underline underline-offset-4">
+                      LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
+                    </h3>
+                    <p className="text-xs font-semibold text-gray-600 mt-1">
+                      TAHUN PELAJARAN {new Date().getFullYear()} / {new Date().getFullYear() + 1}
+                    </p>
+                  </div>
+                ) : (
+                  /* Format Tanpa Kop: Hanya Judul, Tanpa Logo & TTD */
+                  <div className="text-center border-b-2 border-gray-400 pb-3 mb-6">
+                    <h2 className="text-lg font-black uppercase text-black tracking-wide">
+                      LAPORAN HASIL NILAI UJIAN BERBASIS KOMPUTER (CBT)
+                    </h2>
+                    <p className="text-sm font-bold text-gray-700 uppercase mt-0.5">
+                      {kopSettings.namaSekolah}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      TAHUN PELAJARAN {new Date().getFullYear()} / {new Date().getFullYear() + 1}
+                    </p>
+                  </div>
+                )}
+
+                {/* 3. IDENTITAS UJIAN */}
                 <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-gray-800 mb-4 bg-gray-50 p-3 rounded border border-gray-200">
                   <div className="space-y-1">
                     <div>Paket Ujian : <span className="font-bold uppercase">{selectedPaket !== 'ALL' ? paketList.find(p => p.id === selectedPaket)?.nama_paket : 'Semua Paket'}</span></div>
@@ -839,7 +1087,7 @@ export default function HasilUjianPage() {
                   </div>
                 </div>
 
-                {/* TABEL HASIL RESMI */}
+                {/* 4. TABEL HASIL RESMI */}
                 <table className="w-full text-xs border-collapse border border-gray-400 mb-6">
                   <thead>
                     <tr className="bg-gray-100 text-center font-bold text-gray-900">
@@ -878,7 +1126,7 @@ export default function HasilUjianPage() {
                   </tbody>
                 </table>
 
-                {/* STATISTIK RINGKASAN */}
+                {/* 5. STATISTIK RINGKASAN */}
                 <div className="grid grid-cols-4 gap-2 text-xs border border-gray-300 p-3 rounded mb-8 bg-gray-50 text-center font-semibold">
                   <div>Total Peserta: <span className="font-bold">{filteredHasil.length}</span></div>
                   <div>Rata-rata Nilai: <span className="font-bold">{(filteredHasil.reduce((a, b) => a + (Number(b.skor_akhir) || 0), 0) / (filteredHasil.length || 1)).toFixed(1)}</span></div>
@@ -886,23 +1134,25 @@ export default function HasilUjianPage() {
                   <div>Nilai Terendah: <span className="font-bold">{filteredHasil.length > 0 ? Math.min(...filteredHasil.map(h => Number(h.skor_akhir) || 0)) : 0}</span></div>
                 </div>
 
-                {/* KOLOM TANDA TANGAN */}
-                <div className="grid grid-cols-2 text-xs font-semibold text-gray-900 pt-4">
-                  <div className="text-center">
-                    <p>Mengetahui,</p>
-                    <p className="font-bold">Kepala Sekolah / Penanggung Jawab CBT</p>
-                    <div className="h-20"></div>
-                    <p className="font-bold underline uppercase">{kopSettings.kepalaSekolah}</p>
-                    <p className="text-gray-600">NIP. {kopSettings.nipKepala}</p>
+                {/* 6. KOLOM TANDA TANGAN (HANYA JIKA pakaiKop === true) */}
+                {pakaiKop && (
+                  <div className="grid grid-cols-2 text-xs font-semibold text-gray-900 pt-4">
+                    <div className="text-center">
+                      <p>Mengetahui,</p>
+                      <p className="font-bold">Kepala Sekolah / Penanggung Jawab CBT</p>
+                      <div className="h-20"></div>
+                      <p className="font-bold underline uppercase">{kopSettings.kepalaSekolah}</p>
+                      <p className="text-gray-600">{kopSettings.nipKepala ? `NIP. ${kopSettings.nipKepala}` : '-'}</p>
+                    </div>
+                    <div className="text-center">
+                      <p>{kopSettings.kota}, {kopSettings.tanggalCetak}</p>
+                      <p className="font-bold">Guru Pengampu / Proktor CBT</p>
+                      <div className="h-20"></div>
+                      <p className="font-bold underline uppercase">{kopSettings.guruPengampu}</p>
+                      <p className="text-gray-600">{kopSettings.nipGuru ? `NIP. ${kopSettings.nipGuru}` : '-'}</p>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p>{kopSettings.kota}, {kopSettings.tanggalCetak}</p>
-                    <p className="font-bold">Guru Pengampu / Proktor CBT</p>
-                    <div className="h-20"></div>
-                    <p className="font-bold underline uppercase">{kopSettings.guruPengampu}</p>
-                    <p className="text-gray-600">NIP. {kopSettings.nipGuru}</p>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

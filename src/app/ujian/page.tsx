@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, ChevronDown, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -75,9 +75,11 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
   useEffect(() => {
     updateDots();
     window.addEventListener('resize', updateDots);
+    window.addEventListener('scroll', updateDots, true);
     const timer = setTimeout(updateDots, 800); // Tunggu render rich-text images
     return () => {
       window.removeEventListener('resize', updateDots);
+      window.removeEventListener('scroll', updateDots, true);
       clearTimeout(timer);
     };
   }, [premis, respons]);
@@ -259,7 +261,33 @@ export default function UjianPage() {
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Ref dan State untuk Scroll Tampilan Soal & Opsi Jawaban
+  const questionScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+
+  const checkScrollPosition = () => {
+    const el = questionScrollRef.current;
+    if (!el) return;
+    const hasMore = el.scrollHeight - el.scrollTop - el.clientHeight > 30;
+    setCanScrollDown(hasMore);
+  };
+
+  const handleScrollDown = () => {
+    if (questionScrollRef.current) {
+      questionScrollRef.current.scrollBy({ top: 300, behavior: 'smooth' });
+    }
+  };
+
   const router = useRouter();
+
+  // Reset scroll ke atas dan periksa kembali tombol scroll saat ganti soal / font
+  useEffect(() => {
+    if (questionScrollRef.current) {
+      questionScrollRef.current.scrollTop = 0;
+    }
+    const timer = setTimeout(checkScrollPosition, 150);
+    return () => clearTimeout(timer);
+  }, [indexSoal, fontSize, soalList]);
 
   useEffect(() => {
     // Muat ukuran font tersimpan
@@ -840,155 +868,173 @@ export default function UjianPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden max-w-7xl mx-auto w-full">
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 flex flex-col pb-24 md:pb-8 scroll-smooth">
-          <div className="bg-white p-6 md:p-10 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 flex-1 relative flex flex-col transition-all duration-300">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
-              <div className="flex items-center gap-3">
-                <span className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-600 text-white font-black text-lg shadow-md shadow-indigo-600/30">
-                  {indexSoal + 1}
-                </span>
-                <h2 className="text-sm font-bold text-slate-400 tracking-widest uppercase">Soal Ujian</h2>
-              </div>
-              <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">
-                {soalAktif.tipe}
+      <main className="flex-1 flex flex-col relative overflow-hidden max-w-7xl mx-auto w-full px-3 py-2 md:px-6 md:py-4 min-h-0">
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 flex-1 relative flex flex-col min-h-0 overflow-hidden transition-all duration-300">
+          <div className="flex justify-between items-center border-b border-slate-100 p-4 md:px-8 md:py-4 bg-white flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white font-black text-base md:text-lg shadow-md shadow-indigo-600/30">
+                {indexSoal + 1}
               </span>
+              <h2 className="text-xs md:text-sm font-bold text-slate-400 tracking-widest uppercase">Soal Ujian</h2>
             </div>
-            
-            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-              <div 
-                className={`${fontQuestionClass} text-slate-800 mb-8 font-medium prose prose-slate max-w-none prose-p:my-1`}
-                dangerouslySetInnerHTML={{ __html: soalAktif.pertanyaan }} 
-              />
-              
-              {/* Pilihan Ganda */}
-              {(soalAktif.tipe === 'PG' || soalAktif.tipe === 'PG Kompleks') && (
-                <div className="space-y-4">
-                  {['a', 'b', 'c', 'd', 'e'].map((opt) => {
-                    const key = `opsi_${opt}` as keyof typeof soalAktif;
-                    if (!soalAktif[key] || soalAktif[key].trim() === '<p><br></p>') return null;
-                    const isSelected = soalAktif.tipe === 'PG Kompleks' 
-                      ? (jawaban[soalAktif.id] || []).includes(opt.toUpperCase())
-                      : jawaban[soalAktif.id] === opt.toUpperCase();
-
-                    const handleCheck = () => {
-                      if (soalAktif.tipe === 'PG Kompleks') {
-                        const currentArr = jawaban[soalAktif.id] || [];
-                        if (isSelected) {
-                          handleJawaban(soalAktif.id, currentArr.filter((a:string) => a !== opt.toUpperCase()));
-                        } else {
-                          handleJawaban(soalAktif.id, [...currentArr, opt.toUpperCase()]);
-                        }
-                      } else {
-                        handleJawaban(soalAktif.id, opt.toUpperCase());
-                      }
-                    };
-
-                    return (
-                      <label 
-                        key={opt}
-                        className={clsx(
-                          "group flex items-start gap-4 p-4 md:p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 ease-in-out",
-                          isSelected ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-100" : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
-                        )}
-                      >
-                        <div className="relative flex items-center justify-center pt-1">
-                          <input 
-                            type={soalAktif.tipe === 'PG Kompleks' ? "checkbox" : "radio"} 
-                            name={`soal_${soalAktif.id}`}
-                            checked={isSelected}
-                            onChange={handleCheck}
-                            className="sr-only"
-                          />
-                          <div className={clsx(
-                            "w-6 h-6 border-2 flex items-center justify-center transition-all",
-                            soalAktif.tipe === 'PG Kompleks' ? "rounded-md" : "rounded-full",
-                            isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300 group-hover:border-indigo-400"
-                          )}>
-                            {isSelected && (
-                              soalAktif.tipe === 'PG Kompleks' 
-                                ? <CheckCircle2 size={16} className="text-white"/>
-                                : <div className="w-2.5 h-2.5 bg-white rounded-full scale-100 transition-transform"></div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1 flex gap-3 overflow-hidden">
-                          <span className={clsx("font-black text-lg", isSelected ? "text-indigo-700" : "text-slate-400 group-hover:text-indigo-500")}>
-                            {opt.toUpperCase()}.
-                          </span>
-                          <div dangerouslySetInnerHTML={{ __html: soalAktif[key] }} className={clsx(
-                            fontOptionClass,
-                            "flex-1 prose prose-slate overflow-hidden",
-                            isSelected ? "text-indigo-900 font-bold" : "text-slate-700"
-                          )} />
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Menjodohkan */}
-              {soalAktif.tipe === 'Menjodohkan' && (
-                <JodohkanInteractive 
-                  soal={soalAktif} 
-                  jawabanData={jawaban[soalAktif.id]} 
-                  onChange={(data: any) => handleJawaban(soalAktif.id, data)}
-                />
-              )}
-
-              {/* Essay */}
-              {(soalAktif.tipe === 'Isian' || soalAktif.tipe === 'Essay') && (
-                <div className="relative group mt-4">
-                  <textarea 
-                    className="w-full border-2 border-slate-200 p-5 rounded-xl text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all min-h-[200px] resize-y text-lg"
-                    placeholder="Ketik jawaban lengkap Anda di sini..."
-                    value={jawaban[soalAktif.id] || ''}
-                    onChange={(e) => handleJawaban(soalAktif.id, e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
+            <span className="bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">
+              {soalAktif.tipe}
+            </span>
           </div>
           
-          {/* Action Buttons */}
-          <div className="flex justify-between mt-6 gap-3 md:gap-4 flex-shrink-0">
-            <button 
-              onClick={() => setIndexSoal(Math.max(0, indexSoal - 1))}
-              disabled={indexSoal === 0}
-              className="bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed px-4 py-3.5 md:px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
-            >
-              <ChevronLeft size={20} /> <span className="hidden sm:inline">Soal Sebelumnya</span>
-            </button>
+          <div 
+            ref={questionScrollRef}
+            onScroll={checkScrollPosition}
+            className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar"
+          >
+            <div 
+              className={`${fontQuestionClass} text-slate-800 font-medium prose prose-slate max-w-none break-words leading-relaxed prose-p:my-2`}
+              dangerouslySetInnerHTML={{ __html: soalAktif.pertanyaan }} 
+            />
+            
+            {/* Pilihan Ganda */}
+            {(soalAktif.tipe === 'PG' || soalAktif.tipe === 'PG Kompleks') && (
+              <div className="space-y-3.5 pt-2">
+                {['a', 'b', 'c', 'd', 'e'].map((opt) => {
+                  const key = `opsi_${opt}` as keyof typeof soalAktif;
+                  if (!soalAktif[key] || soalAktif[key].trim() === '<p><br></p>') return null;
+                  const isSelected = soalAktif.tipe === 'PG Kompleks' 
+                    ? (jawaban[soalAktif.id] || []).includes(opt.toUpperCase())
+                    : jawaban[soalAktif.id] === opt.toUpperCase();
 
-            <button 
-              onClick={() => toggleRagu(soalAktif.id)}
-              className={clsx(
-                "px-4 py-3.5 md:px-8 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold transition-all active:scale-95",
-                ragu[soalAktif.id] ? "bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600" : "bg-white border border-amber-200 text-amber-600 hover:bg-amber-50"
-              )}
-            >
-              <HelpCircle size={20} className={ragu[soalAktif.id] ? "fill-amber-600/20" : ""} /> 
-              <span className="hidden sm:inline">Ragu-ragu</span>
-            </button>
+                  const handleCheck = () => {
+                    if (soalAktif.tipe === 'PG Kompleks') {
+                      const currentArr = jawaban[soalAktif.id] || [];
+                      if (isSelected) {
+                        handleJawaban(soalAktif.id, currentArr.filter((a:string) => a !== opt.toUpperCase()));
+                      } else {
+                        handleJawaban(soalAktif.id, [...currentArr, opt.toUpperCase()]);
+                      }
+                    } else {
+                      handleJawaban(soalAktif.id, opt.toUpperCase());
+                    }
+                  };
 
-            {indexSoal === soalList.length - 1 ? (
-              <button 
-                onClick={() => handleSelesai(false)}
-                disabled={isSubmitting}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95 disabled:opacity-50"
-              >
-                <span className="hidden sm:inline">{isSubmitting ? 'Menyimpan...' : 'Selesai Ujian'}</span> <CheckCircle2 size={20} />
-              </button>
-            ) : (
-              <button 
-                onClick={() => setIndexSoal(Math.min(soalList.length - 1, indexSoal + 1))}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3.5 md:px-6 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95"
-              >
-                <span className="hidden sm:inline">Soal Berikutnya</span> <ChevronRight size={20} />
-              </button>
+                  return (
+                    <label 
+                      key={opt}
+                      className={clsx(
+                        "group flex items-start gap-3.5 md:gap-4 p-4 md:p-5 rounded-xl border-2 cursor-pointer transition-all duration-200 ease-in-out w-full",
+                        isSelected ? "border-indigo-500 bg-indigo-50/50 shadow-md shadow-indigo-100" : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
+                      )}
+                    >
+                      <div className="relative flex items-center justify-center pt-0.5 flex-shrink-0">
+                        <input 
+                          type={soalAktif.tipe === 'PG Kompleks' ? "checkbox" : "radio"} 
+                          name={`soal_${soalAktif.id}`}
+                          checked={isSelected}
+                          onChange={handleCheck}
+                          className="sr-only"
+                        />
+                        <div className={clsx(
+                          "w-6 h-6 border-2 flex items-center justify-center transition-all",
+                          soalAktif.tipe === 'PG Kompleks' ? "rounded-md" : "rounded-full",
+                          isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300 group-hover:border-indigo-400"
+                        )}>
+                          {isSelected && (
+                            soalAktif.tipe === 'PG Kompleks' 
+                              ? <CheckCircle2 size={16} className="text-white"/>
+                              : <div className="w-2.5 h-2.5 bg-white rounded-full scale-100 transition-transform"></div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1 flex items-start gap-3 min-w-0">
+                        <span className={clsx("font-black text-base md:text-lg flex-shrink-0 pt-0.5", isSelected ? "text-indigo-700" : "text-slate-400 group-hover:text-indigo-500")}>
+                          {opt.toUpperCase()}.
+                        </span>
+                        <div 
+                          dangerouslySetInnerHTML={{ __html: soalAktif[key] }} 
+                          className={clsx(
+                            fontOptionClass,
+                            "flex-1 prose prose-slate max-w-none break-words min-w-0 leading-relaxed",
+                            isSelected ? "text-indigo-900 font-bold" : "text-slate-700"
+                          )} 
+                        />
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Menjodohkan */}
+            {soalAktif.tipe === 'Menjodohkan' && (
+              <JodohkanInteractive 
+                soal={soalAktif} 
+                jawabanData={jawaban[soalAktif.id]} 
+                onChange={(data: any) => handleJawaban(soalAktif.id, data)}
+              />
+            )}
+
+            {/* Essay */}
+            {(soalAktif.tipe === 'Isian' || soalAktif.tipe === 'Essay') && (
+              <div className="relative group mt-4">
+                <textarea 
+                  className="w-full border-2 border-slate-200 p-5 rounded-xl text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all min-h-[200px] resize-y text-base md:text-lg"
+                  placeholder="Ketik jawaban lengkap Anda di sini..."
+                  value={jawaban[soalAktif.id] || ''}
+                  onChange={(e) => handleJawaban(soalAktif.id, e.target.value)}
+                />
+              </div>
             )}
           </div>
+
+          {/* Floating "Scroll ke Bawah" button */}
+          {canScrollDown && (
+            <button
+              type="button"
+              onClick={handleScrollDown}
+              className="absolute bottom-4 right-6 z-20 bg-indigo-600/95 hover:bg-indigo-700 text-white text-xs md:text-sm font-bold px-4 py-2.5 rounded-full shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all active:scale-95 animate-bounce border border-indigo-400"
+              title="Scroll ke Bawah untuk melihat kelanjutan narasi / opsi jawaban"
+            >
+              <span>Scroll ke Bawah</span>
+              <ChevronDown size={16} />
+            </button>
+          )}
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="flex justify-between mt-3 md:mt-4 gap-3 md:gap-4 flex-shrink-0">
+          <button 
+            onClick={() => setIndexSoal(Math.max(0, indexSoal - 1))}
+            disabled={indexSoal === 0}
+            className="bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 disabled:opacity-50 disabled:hover:bg-white disabled:cursor-not-allowed px-4 py-3 md:px-6 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold transition-all active:scale-95 text-sm md:text-base"
+          >
+            <ChevronLeft size={20} /> <span className="hidden sm:inline">Soal Sebelumnya</span>
+          </button>
+
+          <button 
+            onClick={() => toggleRagu(soalAktif.id)}
+            className={clsx(
+              "px-4 py-3 md:px-8 rounded-xl shadow-sm flex items-center justify-center gap-2 font-bold transition-all active:scale-95 text-sm md:text-base",
+              ragu[soalAktif.id] ? "bg-amber-500 text-white shadow-amber-500/30 hover:bg-amber-600" : "bg-white border border-amber-200 text-amber-600 hover:bg-amber-50"
+            )}
+          >
+            <HelpCircle size={20} className={ragu[soalAktif.id] ? "fill-amber-600/20" : ""} /> 
+            <span className="hidden sm:inline">Ragu-ragu</span>
+          </button>
+
+          {indexSoal === soalList.length - 1 ? (
+            <button 
+              onClick={() => handleSelesai(false)}
+              disabled={isSubmitting}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 md:px-6 rounded-xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95 disabled:opacity-50 text-sm md:text-base"
+            >
+              <span className="hidden sm:inline">{isSubmitting ? 'Menyimpan...' : 'Selesai Ujian'}</span> <CheckCircle2 size={20} />
+            </button>
+          ) : (
+            <button 
+              onClick={() => setIndexSoal(Math.min(soalList.length - 1, indexSoal + 1))}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 md:px-6 rounded-xl shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 font-bold transition-all active:scale-95 text-sm md:text-base"
+            >
+              <span className="hidden sm:inline">Soal Berikutnya</span> <ChevronRight size={20} />
+            </button>
+          )}
         </div>
 
         {/* Sidebar Nav */}
