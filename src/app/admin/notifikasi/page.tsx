@@ -57,7 +57,17 @@ export default function NotifikasiPage() {
 
     return (
       <div className="space-y-4 text-slate-700 text-sm md:text-[15px] leading-relaxed">
-        {blocks.map((block, idx) => {
+        {blocks.map((rawBlock, idx) => {
+          // Bersihkan divider '━' di awal & akhir blok teks
+          const block = rawBlock.replace(/^[━\s\n]+/, '').replace(/[━\s\n]+$/, '').trim();
+          if (!block) {
+            return <div key={idx} className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent my-2" />;
+          }
+
+          // Filter baris teks tanpa divider horizontal
+          const allLines = block.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('━'));
+          if (allLines.length === 0) return null;
+
           // 1. Box Catatan Uji Coba / Warning
           if (block.includes('⚠️') || block.toUpperCase().includes('CATATAN TAHAP UJI COBA')) {
             const cleanText = block.replace(/📢\s*CATATAN TAHAP UJI COBA[^\n]*\n?/i, '').replace(/⚠️\s*Penting:\s*/i, '');
@@ -79,10 +89,9 @@ export default function NotifikasiPage() {
           }
 
           // 2. Card Tutorial API Key (Groq AI / Google Gemini)
-          if (block.includes('🔑') || block.toUpperCase().includes('CARA MENGAKTIFKAN') || block.toUpperCase().includes('LANGKAH-LANGKAH MENDAPATKAN')) {
-            const lines = block.split('\n').filter(Boolean);
-            const title = lines[0].replace(/🔑/g, '').trim();
-            const steps = lines.slice(1);
+          if (block.includes('🔑') || block.toUpperCase().includes('CARA MENGAKTIFKAN') || block.toUpperCase().includes('LANGKAH-LANGKAH MENDAPATKAN') || block.toUpperCase().includes('PENGATURAN API KEY')) {
+            const title = allLines[0].replace(/🔑/g, '').replace(/[\*\_]/g, '').trim();
+            const steps = allLines.slice(1);
 
             return (
               <div key={idx} className="bg-gradient-to-br from-purple-50/80 via-indigo-50/50 to-white border-2 border-purple-200/80 rounded-2xl p-5 sm:p-6 shadow-sm my-3 space-y-4">
@@ -142,11 +151,6 @@ export default function NotifikasiPage() {
             );
           }
 
-          // Divider ━━━━━
-          if (block.startsWith('━')) {
-            return <div key={idx} className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent my-1" />;
-          }
-
           // 3. Card Fitur Utama (🌟, 📌, ✨, 📄, 🖥️, ⚙️, atau nomor urut)
           if (
             block.includes('🌟') || block.includes('📌') || 
@@ -154,9 +158,8 @@ export default function NotifikasiPage() {
             block.includes('🖥️') || block.includes('⚙️') ||
             /^\d+\.\s+[A-Z\s]+/.test(block)
           ) {
-            const lines = block.split('\n').filter(Boolean);
-            const rawTitle = lines[0].replace(/^[🌟📌✨📄🖥️⚙️━\*\s\d\.]+/, '').replace(/[\*\_]/g, '').trim();
-            const bullets = lines.slice(1);
+            const rawTitle = allLines[0].replace(/^[🌟📌✨📄🖥️⚙️━\s]+/, '').replace(/[\*\_]/g, '').trim();
+            const bullets = allLines.slice(1);
 
             // Icon & Color Scheme
             let icon = '✦';
