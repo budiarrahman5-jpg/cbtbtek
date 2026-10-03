@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Download, Upload, FileSpreadsheet, Sparkles, X } from 'lucide-react';
+import { PlusCircle, Save, Image as ImageIcon, Link2, Trash2, Plus, Download, Upload, FileSpreadsheet, Sparkles, X, Camera, FileText, BookOpen, AlertCircle, RefreshCw, CheckCircle2, Layers, Sliders, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import * as XLSX from 'xlsx';
+import clsx from 'clsx';
 import 'react-quill-new/dist/quill.snow.css';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
@@ -50,11 +51,32 @@ export default function TambahSoalPage() {
 
   // AI Modal & Bulk States
   const [showAIModal, setShowAIModal] = useState(false);
+  const [aiActiveTab, setAiActiveTab] = useState<'prompt' | 'scan' | 'modul'>('prompt');
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiJumlah, setAiJumlah] = useState<number>(1);
   const [aiProvider, setAiProvider] = useState<'auto' | 'groq' | 'gemini'>('auto');
   const [isAILoading, setIsAILoading] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+
+  // States untuk Scan Foto Soal (Gemini Vision)
+  const [scanImageBase64, setScanImageBase64] = useState<string>('');
+  const [scanImageFileName, setScanImageFileName] = useState<string>('');
+  const [scanTargetTipe, setScanTargetTipe] = useState<'auto' | 'PG' | 'Essay' | 'Isian'>('auto');
+  const [isScanningSoal, setIsScanningSoal] = useState(false);
+  const [scanError, setScanError] = useState('');
+
+  // States untuk Generate dari Modul / PDF / RPP
+  const [modulFileBase64, setModulFileBase64] = useState<string>('');
+  const [modulFileName, setModulFileName] = useState<string>('');
+  const [modulFileMimeType, setModulFileMimeType] = useState<string>('');
+  const [modulText, setModulText] = useState<string>('');
+  const [modulJumlah, setModulJumlah] = useState<number>(5);
+  const [modulTipe, setModulTipe] = useState<string>('PG');
+  const [modulTingkat, setModulTingkat] = useState<string>('proporsional');
+  const [modulInstruksi, setModulInstruksi] = useState<string>('');
+  const [modulProvider, setModulProvider] = useState<'auto' | 'gemini' | 'groq'>('auto');
+  const [isGeneratingModul, setIsGeneratingModul] = useState(false);
+  const [modulError, setModulError] = useState('');
 
   // Bulk Preview Modal States
   const [showBulkPreviewModal, setShowBulkPreviewModal] = useState(false);
@@ -424,6 +446,142 @@ export default function TambahSoalPage() {
     setIsAILoading(false);
   };
 
+  // --- HANDLER SCAN FOTO SOAL (GEMINI VISION) ---
+  const handleScanImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Harap pilih file gambar (JPG, PNG, atau WEBP).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran gambar maksimal 10MB.');
+      return;
+    }
+
+    setScanImageFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setScanImageBase64(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleExecuteScanSoal = async () => {
+    if (!scanImageBase64) {
+      alert('Harap unggah atau ambil foto lembar soal terlebih dahulu!');
+      return;
+    }
+
+    setIsScanningSoal(true);
+    setScanError('');
+
+    try {
+      const res = await fetch('/api/gemini/ocr-soal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: scanImageBase64,
+          targetTipe: scanTargetTipe
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal memindai soal dengan Gemini Vision.');
+      }
+
+      if (!data.result || data.result.length === 0) {
+        throw new Error('Tidak ada butir soal yang berhasil diekstrak dari gambar.');
+      }
+
+      setBulkQuestions(data.result);
+      setBulkTargetPaket(selectedPaket);
+      setShowAIModal(false);
+      setShowBulkPreviewModal(true);
+      setScanImageBase64('');
+      setScanImageFileName('');
+    } catch (err: any) {
+      setScanError(err.message || 'Terjadi kesalahan saat memindai foto soal.');
+    } finally {
+      setIsScanningSoal(false);
+    }
+  };
+
+  // --- HANDLER GENERATE DARI MODUL / PDF / RPP ---
+  const handleModulFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setModulFileName(file.name);
+    setModulFileMimeType(file.type || 'application/pdf');
+
+    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      const textReader = new FileReader();
+      textReader.onload = (ev) => {
+        setModulText(ev.target?.result as string);
+      };
+      textReader.readAsText(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setModulFileBase64(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleExecuteGenerateModul = async () => {
+    if (!modulFileBase64 && (!modulText || modulText.trim().length < 10)) {
+      alert('Harap unggah file PDF modul / RPP atau tempelkan teks materi pelajaran terlebih dahulu!');
+      return;
+    }
+
+    setIsGeneratingModul(true);
+    setModulError('');
+
+    try {
+      const res = await fetch('/api/gemini/generate-modul', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: modulFileBase64,
+          fileMimeType: modulFileMimeType,
+          textContent: modulText,
+          jumlah: modulJumlah,
+          tipe: modulTipe,
+          tingkat: modulTingkat,
+          instruksiTambahan: modulInstruksi,
+          provider: modulProvider
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal membuat soal dari modul.');
+      }
+
+      if (!data.result || data.result.length === 0) {
+        throw new Error('AI tidak mengembalikan butir soal yang valid.');
+      }
+
+      setBulkQuestions(data.result);
+      setBulkTargetPaket(selectedPaket);
+      setShowAIModal(false);
+      setShowBulkPreviewModal(true);
+      setModulFileBase64('');
+      setModulFileName('');
+      setModulText('');
+    } catch (err: any) {
+      setModulError(err.message || 'Terjadi kesalahan saat membuat soal dari modul.');
+    } finally {
+      setIsGeneratingModul(false);
+    }
+  };
+
   const handleUpdateBulkQuestion = (index: number, field: string, value: any) => {
     setBulkQuestions(prev => {
       const updated = [...prev];
@@ -539,24 +697,44 @@ export default function TambahSoalPage() {
           <PlusCircle className="text-indigo-600 w-8 h-8" />
           <h2 className="text-2xl font-bold text-slate-800">Tambah Soal Canggih</h2>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button 
-            onClick={() => setShowAIModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-sm font-bold shadow-md shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95"
-            title="Buat Soal Otomatis dengan Groq AI"
+            type="button"
+            onClick={() => { setAiActiveTab('prompt'); setShowAIModal(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs md:text-sm font-bold shadow-md shadow-indigo-500/25 transition-all hover:scale-105 active:scale-95"
+            title="Buat Soal Otomatis Berdasarkan Topik"
           >
-            <Sparkles size={16} className="animate-pulse" /> Buat Soal AI
+            <Sparkles size={16} className="text-amber-300" /> Buat Soal AI
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => { setAiActiveTab('scan'); setShowAIModal(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg text-xs md:text-sm font-bold shadow-md shadow-blue-500/25 transition-all hover:scale-105 active:scale-95"
+            title="Scan Foto Halaman Buku / Naskah Kertas Soal (Gemini Vision)"
+          >
+            <Camera size={16} /> Scan Foto Soal
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => { setAiActiveTab('modul'); setShowAIModal(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs md:text-sm font-bold shadow-md shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95"
+            title="Generate Soal dari Modul / PDF / RPP"
+          >
+            <FileText size={16} /> Dari Modul / RPP
           </button>
           
           <button 
+            type="button"
             onClick={downloadTemplateExcel}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-bold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs md:text-sm font-bold transition-colors"
           >
-            <Download size={16} /> Template Excel
+            <Download size={15} /> Template Excel
           </button>
           
-          <label className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-sm font-bold transition-colors cursor-pointer">
-            <FileSpreadsheet size={16} /> Upload Excel
+          <label className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs md:text-sm font-bold transition-colors cursor-pointer">
+            <FileSpreadsheet size={15} /> Upload Excel
             <input 
               type="file" 
               accept=".xlsx, .xls" 
@@ -761,120 +939,528 @@ export default function TambahSoalPage() {
         <Save size={24} /> SIMPAN SOAL
       </button>
       
-      {/* AI Modal */}
+      {/* AI Modal (Multi-Tab: Prompt, Scan Foto Soal, Modul/RPP) */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 border-t-4 border-indigo-500">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                <Sparkles className="text-indigo-600" /> Asisten AI B-TEK
-              </h3>
-              <button onClick={() => setShowAIModal(false)} className="text-slate-400 hover:text-red-500 transition-colors">
-                <X size={24} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-5 md:p-7 border-t-4 border-indigo-600 my-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25">
+                  <Sparkles size={20} className="text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="text-lg md:text-xl font-black text-slate-800">
+                    Asisten AI Pembuat Soal
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Pilih metode pembuatan soal otomatis yang Anda inginkan
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAIModal(false)} 
+                className="text-slate-400 hover:text-red-500 p-2 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <X size={20} />
               </button>
             </div>
 
-            {/* Pilihan Mesin AI */}
-            <div className="mb-3">
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>Pilih Mesin AI:</span>
-                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full border border-indigo-200">
-                  {aiProvider === 'auto' ? '⚡ Groq + Gemini' : aiProvider === 'groq' ? '🚀 Groq AI' : '🌟 Google Gemini'}
-                </span>
-              </label>
-              <select
-                value={aiProvider}
-                onChange={(e) => setAiProvider(e.target.value as any)}
-                disabled={isAILoading}
-                className="w-full border-2 border-indigo-200 rounded-xl p-2.5 font-bold text-xs bg-indigo-50/70 text-indigo-950 focus:border-indigo-500 outline-none transition-all"
+            {/* Navigasi Tab */}
+            <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100/80 rounded-xl mb-5 text-xs font-extrabold">
+              <button
+                type="button"
+                onClick={() => setAiActiveTab('prompt')}
+                className={clsx(
+                  "py-2.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-center",
+                  aiActiveTab === 'prompt'
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                )}
               >
-                <option value="auto">⚡ Otomatis (Rekomendasi: Groq Kilat + Cadangan Gemini)</option>
-                <option value="groq">🚀 Groq AI (Super Cepat ~1-2 Detik)</option>
-                <option value="gemini">🌟 Google Gemini (Akurat & Luas)</option>
-              </select>
+                <Sparkles size={14} className={aiActiveTab === 'prompt' ? "text-amber-500" : ""} />
+                <span>Tulis Topik</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAiActiveTab('scan')}
+                className={clsx(
+                  "py-2.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-center",
+                  aiActiveTab === 'scan'
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                )}
+              >
+                <Camera size={14} className={aiActiveTab === 'scan' ? "text-indigo-600" : ""} />
+                <span>📷 Scan Foto Buku</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAiActiveTab('modul')}
+                className={clsx(
+                  "py-2.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 text-center",
+                  aiActiveTab === 'modul'
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                )}
+              >
+                <FileText size={14} className={aiActiveTab === 'modul' ? "text-emerald-600" : ""} />
+                <span>📄 Modul / PDF / RPP</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  Tipe Soal:
-                </label>
-                <select
-                  value={tipe}
-                  onChange={(e) => setTipe(e.target.value)}
-                  disabled={isAILoading}
-                  className="w-full border-2 border-indigo-100 rounded-xl p-2.5 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
-                >
-                  <option value="PG">Pilihan Ganda (PG)</option>
-                  <option value="PG Kompleks">PG Kompleks</option>
-                  <option value="Isian">Isian Singkat</option>
-                  <option value="Essay">Essay / Uraian</option>
-                  <option value="Menjodohkan">Menjodohkan</option>
-                </select>
-              </div>
+            {/* TAB 1: TULIS TOPIK / PROMPT */}
+            {aiActiveTab === 'prompt' && (
+              <div className="space-y-4">
+                {/* Pilihan Mesin AI */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Pilih Mesin AI:</span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full border border-indigo-200">
+                      {aiProvider === 'auto' ? '⚡ Groq + Gemini' : aiProvider === 'groq' ? '🚀 Groq AI' : '🌟 Google Gemini'}
+                    </span>
+                  </label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => setAiProvider(e.target.value as any)}
+                    disabled={isAILoading}
+                    className="w-full border-2 border-indigo-200 rounded-xl p-2.5 font-bold text-xs bg-indigo-50/70 text-indigo-950 focus:border-indigo-500 outline-none transition-all"
+                  >
+                    <option value="auto">⚡ Otomatis (Rekomendasi: Groq Kilat + Cadangan Gemini)</option>
+                    <option value="groq">🚀 Groq AI (Super Cepat ~1-2 Detik)</option>
+                    <option value="gemini">🌟 Google Gemini (Akurat & Luas)</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                  Jumlah Soal:
-                </label>
-                <select
-                  value={aiJumlah}
-                  onChange={(e) => setAiJumlah(Number(e.target.value))}
-                  disabled={isAILoading}
-                  className="w-full border-2 border-indigo-100 rounded-xl p-2.5 font-bold text-sm bg-indigo-50/50 text-indigo-900 focus:border-indigo-500 outline-none transition-all"
-                >
-                  <option value={1}>1 Soal (Langsung ke Form)</option>
-                  <option value={5}>5 Soal (Mode Massal + Preview)</option>
-                  <option value={10}>10 Soal (Mode Massal + Preview)</option>
-                  <option value={15}>15 Soal (Mode Massal + Preview)</option>
-                  <option value={20}>20 Soal (Mode Massal + Preview)</option>
-                </select>
-              </div>
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Tipe Soal:
+                    </label>
+                    <select
+                      value={tipe}
+                      onChange={(e) => setTipe(e.target.value)}
+                      disabled={isAILoading}
+                      className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs bg-white text-slate-800 focus:border-indigo-500 outline-none transition-all"
+                    >
+                      <option value="PG">Pilihan Ganda (PG)</option>
+                      <option value="PG Kompleks">PG Kompleks</option>
+                      <option value="Isian">Isian Singkat</option>
+                      <option value="Essay">Essay / Uraian</option>
+                      <option value="Menjodohkan">Menjodohkan</option>
+                    </select>
+                  </div>
 
-            {aiJumlah > 1 ? (
-              <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 leading-relaxed">
-                <span className="font-bold">✨ Mode Massal Aktif:</span> Groq AI akan membuat <strong>{aiJumlah} butir soal</strong> sekaligus. Anda dapat meninjau, mengedit setiap pertanyaan & pilihan jawaban, menambah atau menghapus nomor sebelum disimpan ke Paket Soal.
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Jumlah Soal:
+                    </label>
+                    <select
+                      value={aiJumlah}
+                      onChange={(e) => setAiJumlah(Number(e.target.value))}
+                      disabled={isAILoading}
+                      className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs bg-white text-slate-800 focus:border-indigo-500 outline-none transition-all"
+                    >
+                      <option value={1}>1 Soal (Langsung ke Form)</option>
+                      <option value={5}>5 Soal (Mode Massal + Preview)</option>
+                      <option value={10}>10 Soal (Mode Massal + Preview)</option>
+                      <option value={15}>15 Soal (Mode Massal + Preview)</option>
+                      <option value={20}>20 Soal (Mode Massal + Preview)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {aiJumlah > 1 ? (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-800 leading-relaxed">
+                    <span className="font-bold">✨ Mode Massal Aktif:</span> AI akan membuat <strong>{aiJumlah} butir soal</strong> sekaligus. Anda dapat meninjau, mengedit pertanyaan & pilihan jawaban, menambah atau menghapus nomor sebelum disimpan ke Paket Soal.
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    {tipe === 'PG' || tipe === 'PG Kompleks' 
+                      ? '✨ AI akan otomatis mengisi teks pertanyaan, opsi jawaban A, B, C, D, dan kunci jawaban.'
+                      : tipe === 'Essay' || tipe === 'Isian'
+                      ? '✨ AI akan mengisi teks pertanyaan dan kunci/panduan indikator jawaban.'
+                      : '✨ AI akan mengisi premis, respons yang benar, dan pengecoh.'
+                    }
+                  </p>
+                )}
+
+                <textarea
+                  className="w-full border-2 border-slate-200 rounded-xl p-3.5 focus:border-indigo-500 outline-none resize-none font-medium text-xs md:text-sm"
+                  rows={4}
+                  placeholder={
+                    aiJumlah > 1 
+                      ? `Contoh: Buatkan ${aiJumlah} soal pilihan ganda tentang Hukum Newton untuk kelas 10 SMA, tingkat kesulitan sedang hingga HOTS.` 
+                      : "Contoh: Buatkan 1 soal HOTS tentang fotosintesis untuk anak SMA, lengkap dengan pengecoh yang mengecoh."
+                  }
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  disabled={isAILoading}
+                />
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button 
+                    type="button"
+                    onClick={() => setShowAIModal(false)}
+                    className="px-4 py-2.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                    disabled={isAILoading}
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleGenerateAI}
+                    disabled={isAILoading || !aiPrompt}
+                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    {isAILoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Menenun Soal AI...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} className="text-amber-300" />
+                        <span>{aiJumlah > 1 ? `Generate ${aiJumlah} Soal` : 'Generate Sekarang'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-slate-500 mb-4">
-                {tipe === 'PG' || tipe === 'PG Kompleks' 
-                  ? '✨ AI akan otomatis mengisi teks pertanyaan, opsi jawaban A, B, C, D, dan kunci jawaban.'
-                  : tipe === 'Essay' || tipe === 'Isian'
-                  ? '✨ AI akan mengisi teks pertanyaan dan kunci/panduan indikator jawaban.'
-                  : '✨ AI akan mengisi premis, respons yang benar, dan pengecoh.'
-                }
-              </p>
             )}
 
-            <textarea
-              className="w-full border-2 border-slate-200 rounded-xl p-4 focus:border-indigo-500 outline-none resize-none mb-4 font-medium"
-              rows={4}
-              placeholder={
-                aiJumlah > 1 
-                  ? `Contoh: Buatkan ${aiJumlah} soal pilihan ganda tentang Hukum Newton untuk kelas 10 SMA, tingkat kesulitan sedang hingga HOTS.` 
-                  : "Contoh: Buatkan 1 soal HOTS tentang fotosintesis untuk anak SMA, lengkap dengan pengecoh yang mengecoh."
-              }
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              disabled={isAILoading}
-            />
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setShowAIModal(false)}
-                className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-                disabled={isAILoading}
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleGenerateAI}
-                disabled={isAILoading}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors"
-              >
-                {isAILoading ? 'Menenun Sihir AI...' : <><Sparkles size={18} /> {aiJumlah > 1 ? `Generate ${aiJumlah} Soal` : 'Generate Sekarang'}</>}
-              </button>
-            </div>
+            {/* TAB 2: SCAN FOTO SOAL DARI BUKU / LEMBAR KERTAS (GEMINI VISION) */}
+            {aiActiveTab === 'scan' && (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 p-3.5 rounded-xl text-xs text-blue-900 leading-relaxed">
+                  <span className="font-extrabold flex items-center gap-1.5 text-blue-800 text-sm mb-1">
+                    <Camera size={16} className="text-blue-600" />
+                    Pindai Naskah Soal Fisik dengan Google Gemini Vision
+                  </span>
+                  Foto halaman buku paket, naskah cetak, atau lembar ujian Anda. AI Gemini akan membaca teks pertanyaan, opsi A–E, rumus matematika, dan mendeteksi kunci jawaban yang tertera di naskah.
+                </div>
+
+                {/* Upload / Kamera */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                    Foto Halaman Buku / Naskah Kertas Soal
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="scan-soal-file-input"
+                    onChange={handleScanImageUpload}
+                    className="hidden"
+                  />
+
+                  {!scanImageBase64 ? (
+                    <label
+                      htmlFor="scan-soal-file-input"
+                      className="border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-indigo-50/20 hover:bg-indigo-50/50 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-indigo-100 group-hover:scale-110 text-indigo-600 flex items-center justify-center transition-all shadow-sm">
+                        <Camera size={24} />
+                      </div>
+                      <span className="font-extrabold text-xs md:text-sm text-indigo-700 block">
+                        Klik untuk Buka Kamera atau Pilih Foto Naskah Soal
+                      </span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Mendukung foto JPG, PNG, WEBP dari kamera HP / scan dokumen (maks. 10MB)
+                      </span>
+                    </label>
+                  ) : (
+                    <div className="border border-indigo-100 bg-slate-50 rounded-xl p-3 flex items-center gap-3">
+                      <div className="w-20 h-16 bg-slate-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
+                        <img src={scanImageBase64} alt="Preview Soal" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs">
+                          <CheckCircle2 size={14} /> Foto Siap Dipindai
+                        </div>
+                        <p className="text-xs text-slate-600 font-medium truncate mt-0.5">
+                          {scanImageFileName || 'Foto Soal Buku'}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <label
+                          htmlFor="scan-soal-file-input"
+                          className="cursor-pointer text-xs bg-white border border-slate-200 hover:bg-slate-100 font-bold px-2.5 py-1.5 rounded-lg text-slate-700 transition-all flex items-center gap-1"
+                        >
+                          <RefreshCw size={12} /> Ganti
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => { setScanImageBase64(''); setScanImageFileName(''); }}
+                          className="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Target Paket Soal:
+                    </label>
+                    <select
+                      value={selectedPaket}
+                      onChange={(e) => setSelectedPaket(e.target.value)}
+                      className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs bg-white text-slate-700 focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">- Wajib Pilih Paket -</option>
+                      {paketList.map(p => (
+                        <option key={p.id} value={p.id}>{p.nama_paket}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Tipe Soal di Kertas:
+                    </label>
+                    <select
+                      value={scanTargetTipe}
+                      onChange={(e) => setScanTargetTipe(e.target.value as any)}
+                      className="w-full border-2 border-slate-200 rounded-xl p-2.5 font-bold text-xs bg-white text-slate-700 focus:border-indigo-500 outline-none"
+                    >
+                      <option value="auto">Otomatis Deteksi dari Gambar</option>
+                      <option value="PG">Pilihan Ganda (PG)</option>
+                      <option value="Essay">Essay / Uraian</option>
+                      <option value="Isian">Isian Singkat</option>
+                    </select>
+                  </div>
+                </div>
+
+                {scanError && (
+                  <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl flex items-start gap-2.5 text-red-700 text-xs">
+                    <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Gagal Memindai Soal:</span> {scanError}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAIModal(false)}
+                    className="px-4 py-2.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                    disabled={isScanningSoal}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteScanSoal}
+                    disabled={isScanningSoal || !scanImageBase64}
+                    className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    {isScanningSoal ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>Gemini Vision Membaca Soal...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={16} />
+                        <span>Pindai & Ekstrak ke Preview</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: GENERATE DARI MODUL / PDF / RPP */}
+            {aiActiveTab === 'modul' && (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 p-3.5 rounded-xl text-xs text-emerald-900 leading-relaxed">
+                  <span className="font-extrabold flex items-center gap-1.5 text-emerald-800 text-sm mb-1">
+                    <FileText size={16} className="text-emerald-600" />
+                    Generate Soal dari Modul Ajar / PDF / Dokumen RPP
+                  </span>
+                  Unggah file modul pelajaran (PDF/TXT) atau tempelkan teks materi ajar. AI akan menganalisis capaian pembelajaran dan merumuskan butir-butir soal yang berkualitas dan relevan.
+                </div>
+
+                {/* Input File & Teks Materi */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Upload Dokumen Modul (PDF / TXT / Gambar)
+                    </label>
+                    {modulFileName && (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        {modulFileName}
+                      </span>
+                    )}
+                  </div>
+
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,image/*"
+                    id="modul-file-input"
+                    onChange={handleModulFileUpload}
+                    className="hidden"
+                  />
+
+                  <div className="flex gap-2">
+                    <label
+                      htmlFor="modul-file-input"
+                      className="cursor-pointer border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/30 hover:bg-emerald-50/60 rounded-xl px-4 py-3 flex-1 flex items-center justify-center gap-2 text-xs font-bold text-emerald-800 transition-all"
+                    >
+                      <Upload size={16} />
+                      {modulFileName ? `Ganti File (${modulFileName})` : 'Pilih File PDF Modul / RPP'}
+                    </label>
+                    {modulFileName && (
+                      <button
+                        type="button"
+                        onClick={() => { setModulFileBase64(''); setModulFileName(''); }}
+                        className="p-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all"
+                        title="Hapus File"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                    Atau Tempelkan Teks RPP / Modul Ajar di Sini:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={modulText}
+                    onChange={(e) => setModulText(e.target.value)}
+                    placeholder="Contoh: Salin teks ringkasan materi, capaian pembelajaran (CP), atau butir bahasan dari Word / Google Docs ke sini..."
+                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-xs font-medium focus:border-indigo-500 outline-none resize-none bg-slate-50/50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Jumlah Soal:
+                    </label>
+                    <select
+                      value={modulJumlah}
+                      onChange={(e) => setModulJumlah(Number(e.target.value))}
+                      className="w-full border-2 border-slate-200 rounded-lg p-2 font-bold text-xs bg-white text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value={3}>3 Soal</option>
+                      <option value={5}>5 Soal</option>
+                      <option value={10}>10 Soal</option>
+                      <option value={15}>15 Soal</option>
+                      <option value={20}>20 Soal</option>
+                      <option value={30}>30 Soal</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Format Soal:
+                    </label>
+                    <select
+                      value={modulTipe}
+                      onChange={(e) => setModulTipe(e.target.value)}
+                      className="w-full border-2 border-slate-200 rounded-lg p-2 font-bold text-xs bg-white text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value="PG">Pilihan Ganda (PG)</option>
+                      <option value="HOTS">Analisis / HOTS</option>
+                      <option value="Campuran">Campuran (PG + Esai)</option>
+                      <option value="Essay">Essay / Uraian</option>
+                      <option value="Isian">Isian Singkat</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Tingkat Kesukaran:
+                    </label>
+                    <select
+                      value={modulTingkat}
+                      onChange={(e) => setModulTingkat(e.target.value)}
+                      className="w-full border-2 border-slate-200 rounded-lg p-2 font-bold text-xs bg-white text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value="proporsional">Proporsional</option>
+                      <option value="standar">Standar Ujian</option>
+                      <option value="hots">Khusus HOTS</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Mesin AI:
+                    </label>
+                    <select
+                      value={modulProvider}
+                      onChange={(e) => setModulProvider(e.target.value as any)}
+                      className="w-full border-2 border-slate-200 rounded-lg p-2 font-bold text-xs bg-white text-slate-700 outline-none focus:border-indigo-500"
+                    >
+                      <option value="auto">⚡ Otomatis</option>
+                      <option value="gemini">🌟 Google Gemini (PDF)</option>
+                      <option value="groq">🚀 Groq Llama 3.3</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Catatan Khusus Guru (Opsional):
+                  </label>
+                  <input
+                    type="text"
+                    value={modulInstruksi}
+                    onChange={(e) => setModulInstruksi(e.target.value)}
+                    placeholder="Misal: Berikan stimulus kasus nyata dan fokus pada Bab 2..."
+                    className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs font-medium focus:border-indigo-500 outline-none bg-white"
+                  />
+                </div>
+
+                {modulError && (
+                  <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl flex items-start gap-2.5 text-red-700 text-xs">
+                    <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Gagal Generate Modul:</span> {modulError}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAIModal(false)}
+                    className="px-4 py-2.5 font-bold text-xs text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                    disabled={isGeneratingModul}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteGenerateModul}
+                    disabled={isGeneratingModul || (!modulFileBase64 && !modulText)}
+                    className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    {isGeneratingModul ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>AI Merumuskan Soal dari Modul...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} className="text-amber-300" />
+                        <span>Generate {modulJumlah} Soal dari Modul</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
