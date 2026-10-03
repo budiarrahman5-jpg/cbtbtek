@@ -142,26 +142,62 @@ export default function NotifikasiPage() {
             );
           }
 
-          // 3. Card Fitur Utama (🌟 atau 📌)
-          if (block.includes('🌟') || block.includes('📌')) {
+          // Divider ━━━━━
+          if (block.startsWith('━')) {
+            return <div key={idx} className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent my-1" />;
+          }
+
+          // 3. Card Fitur Utama (🌟, 📌, ✨, 📄, 🖥️, ⚙️, atau nomor urut)
+          if (
+            block.includes('🌟') || block.includes('📌') || 
+            block.includes('✨') || block.includes('📄') || 
+            block.includes('🖥️') || block.includes('⚙️') ||
+            /^\d+\.\s+[A-Z\s]+/.test(block)
+          ) {
             const lines = block.split('\n').filter(Boolean);
-            const title = lines[0].replace(/^[🌟📌]\s*/, '').trim();
+            const rawTitle = lines[0].replace(/^[🌟📌✨📄🖥️⚙️━\*\s\d\.]+/, '').replace(/[\*\_]/g, '').trim();
             const bullets = lines.slice(1);
 
+            // Icon & Color Scheme
+            let icon = '✦';
+            let colorTheme = 'border-slate-200/90 bg-slate-50/70 text-indigo-600';
+            if (block.includes('✨') || block.includes('AI') || block.includes('INOVASI')) {
+              icon = '✨';
+              colorTheme = 'border-purple-200/80 bg-gradient-to-br from-purple-50/60 via-indigo-50/40 to-white text-purple-600';
+            } else if (block.includes('📄') || block.includes('PDF') || block.includes('LAPORAN')) {
+              icon = '📄';
+              colorTheme = 'border-blue-200/80 bg-gradient-to-br from-blue-50/50 via-slate-50/40 to-white text-blue-600';
+            } else if (block.includes('🖥️') || block.includes('LAYAR') || block.includes('FULLSCREEN')) {
+              icon = '🖥️';
+              colorTheme = 'border-teal-200/80 bg-gradient-to-br from-teal-50/50 via-slate-50/40 to-white text-teal-600';
+            } else if (block.includes('⚙️') || block.includes('STATUS') || block.includes('KOREKSI')) {
+              icon = '⚙️';
+              colorTheme = 'border-amber-200/80 bg-gradient-to-br from-amber-50/50 via-slate-50/40 to-white text-amber-600';
+            }
+
             return (
-              <div key={idx} className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs my-3 space-y-2.5 hover:border-indigo-200 transition-colors">
-                <h4 className="font-extrabold text-slate-800 text-sm sm:text-base flex items-center gap-2">
-                  <span className="text-indigo-600 font-black">✦</span> {title}
+              <div key={idx} className={`border-2 rounded-2xl p-4 sm:p-5 shadow-xs my-3 space-y-3 transition-colors ${colorTheme}`}>
+                <h4 className="font-black text-slate-800 text-sm sm:text-base flex items-center gap-2">
+                  <span className="font-bold">{icon}</span> {rawTitle}
                 </h4>
                 {bullets.length > 0 && (
-                  <ul className="space-y-1.5 pl-2 sm:pl-4">
-                    {bullets.map((b, bIdx) => (
-                      <li key={bIdx} className="flex items-start gap-2 text-slate-600 text-sm">
-                        <span className="text-indigo-500 font-bold mt-1 text-xs">•</span>
-                        <span className="flex-1 leading-relaxed">{b.replace(/^[•\-]\s*/, '')}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-2.5 pl-1 sm:pl-2">
+                    {bullets.map((b, bIdx) => {
+                      const cleanB = b.replace(/^[•\-]\s*/, '').trim();
+                      const formattedText = cleanB
+                        .replace(/\*([^*]+)\*/g, '<strong class="font-extrabold text-slate-900">$1</strong>')
+                        .replace(/_([^_]+)_/g, '<em class="italic text-slate-600">$1</em>');
+                      return (
+                        <div key={bIdx} className="flex items-start gap-2.5 text-slate-700 text-xs sm:text-sm leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-2"></span>
+                          <span 
+                            className="flex-1"
+                            dangerouslySetInnerHTML={{ __html: formattedText }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
@@ -177,23 +213,36 @@ export default function NotifikasiPage() {
           }
 
           // 5. Salam Penutup
-          if (block.includes('Salam hangat') || block.includes('Tim Pengembang')) {
+          if (block.includes('Salam hangat') || block.includes('Tim Pengembang') || block.includes('Tim Admin CBT BTEK')) {
             return (
-              <div key={idx} className="pt-2 text-slate-600 font-medium italic text-sm">
-                {block.split('\n').map((line, lIdx) => (
-                  <div key={lIdx} className={lIdx > 0 ? "font-bold text-indigo-700 not-italic mt-0.5" : ""}>
-                    {line}
+              <div key={idx} className="pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3 my-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                    BT
                   </div>
-                ))}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Diterbitkan Oleh:</span>
+                    <span className="font-black text-indigo-950 text-sm">Tim Admin CBT BTEK</span>
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500 font-medium italic bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                  Sistem Asesmen Sekolah Terintegrasi
+                </span>
               </div>
             );
           }
 
           // Paragraf Teks Biasa
+          const inlineFormatted = block
+            .replace(/\*([^*]+)\*/g, '<strong class="font-extrabold text-slate-900">$1</strong>')
+            .replace(/_([^_]+)_/g, '<em class="italic text-slate-600">$1</em>');
+
           return (
-            <p key={idx} className="text-slate-700 leading-relaxed font-normal">
-              {block}
-            </p>
+            <p 
+              key={idx} 
+              className="text-slate-700 leading-relaxed font-normal text-sm sm:text-[15px]"
+              dangerouslySetInnerHTML={{ __html: inlineFormatted }}
+            />
           );
         })}
       </div>
@@ -256,21 +305,26 @@ export default function NotifikasiPage() {
               timeStyle: 'short'
             }).format(tgl);
 
-            const isV41 = item.id.includes('v4-1') || item.judul?.includes('v4.1');
-            const isV40 = item.id.includes('v4-0') || item.judul?.includes('v4.0');
+            const isV42 = item.id?.includes('v4-2') || item.judul?.includes('v4.2');
+            const isV41 = item.id?.includes('v4-1') || item.judul?.includes('v4.1');
+            const isV40 = item.id?.includes('v4-0') || item.judul?.includes('v4.0');
 
             return (
               <div 
                 key={item.id} 
                 className={`bg-white rounded-2xl border transition-all duration-200 shadow-sm hover:shadow-md overflow-hidden ${
-                  isV41 
+                  isV42 
+                    ? 'border-emerald-300 ring-2 ring-emerald-100/90'
+                    : isV41 
                     ? 'border-purple-300 ring-2 ring-purple-100' 
                     : 'border-slate-200'
                 }`}
               >
                 {/* Header Card */}
                 <div className={`p-5 sm:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                  isV41 
+                  isV42 
+                    ? 'bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-white border-emerald-100'
+                    : isV41 
                     ? 'bg-gradient-to-r from-purple-50/80 via-indigo-50/50 to-white border-purple-100' 
                     : isV40 
                     ? 'bg-indigo-50/50 border-indigo-100' 
@@ -278,12 +332,17 @@ export default function NotifikasiPage() {
                 }`}>
                   <div className="space-y-1.5 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      {isV41 && (
+                      {isV42 && (
+                        <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white font-black text-[11px] uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1">
+                          <Sparkles size={12} className="text-amber-300" /> Rilis Resmi v4.2 (AI Vision & PDF Standar)
+                        </span>
+                      )}
+                      {isV41 && !isV42 && (
                         <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-[11px] uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1">
                           <Sparkles size={12} /> Rilis Resmi v4.1 (AI Enabled)
                         </span>
                       )}
-                      {isV40 && (
+                      {isV40 && !isV41 && !isV42 && (
                         <span className="bg-indigo-600 text-white font-black text-[11px] uppercase tracking-wider px-3 py-1 rounded-full shadow-xs">
                           Rilis Resmi v4.0
                         </span>
