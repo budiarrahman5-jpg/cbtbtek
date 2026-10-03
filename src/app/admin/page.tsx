@@ -1,14 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { 
-  Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, 
-  Activity, ArrowUpCircle, ArrowDownCircle, Save, Shield,
-  Sparkles, Bell, ArrowRight, X, ChevronRight
-} from 'lucide-react';
+import { Users, CheckCircle, TrendingUp, AlertTriangle, RefreshCw, Activity, ArrowUpCircle, ArrowDownCircle, Save, Shield } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell
@@ -29,7 +24,6 @@ export default function AdminDashboard() {
   const [distribusiData, setDistribusiData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
   
   useEffect(() => {
     fetchStats();
@@ -138,66 +132,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Banner Rilis Broadcast v4.2 */}
-      {showBanner && (
-        <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-indigo-50 border-2 border-emerald-300/90 rounded-2xl p-5 sm:p-6 shadow-sm relative overflow-hidden transition-all">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-2 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white font-black text-xs uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1.5">
-                  <Sparkles size={13} className="text-amber-300" />
-                  Rilis Resmi v4.2 Aktif
-                </span>
-                <span className="text-xs font-bold text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Google Gemini AI Vision & PDF Standar A4
-                </span>
-              </div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                🚀 Pembaruan Sistem CBT BTEK v4.2 – Fitur Baru & Peningkatan Sistem Ujian
-              </h2>
-              <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                Pembaruan sistem menghadirkan Inovasi AI Gemini Vision (Scan Soal dari Lembar Buku & Scan Absensi Siswa), Generator Soal Modul/RPP, Cetak Laporan PDF 1:1, Fullscreen Bebas Teks Terpotong, serta Manajemen Status Koreksi Massal.
-              </p>
-              
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="text-xs bg-white text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
-                  📷 Scan Foto Soal (Buku/Kertas)
-                </span>
-                <span className="text-xs bg-white text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
-                  📄 Generator Soal Modul / PDF / RPP
-                </span>
-                <span className="text-xs bg-white text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
-                  👥 Scan Presensi Siswa Otomatis
-                </span>
-                <span className="text-xs bg-white text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
-                  🔑 Google Gemini API Key Gratis
-                </span>
-                <span className="text-xs bg-white text-slate-700 font-bold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
-                  🖨️ Cetak PDF Presisi A4
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-row md:flex-col items-center md:items-end gap-2.5 w-full md:w-auto shrink-0 pt-2 md:pt-0">
-              <Link
-                href="/admin/notifikasi"
-                className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm px-5 py-3 rounded-xl shadow-md shadow-emerald-600/20 transition-all active:scale-95"
-              >
-                <span>Buka Pengumuman & Tutorial</span>
-                <ArrowRight size={16} />
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowBanner(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 font-bold px-3 py-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
-              >
-                Tutup Pesan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header & Segarkan */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100">
         <div>
