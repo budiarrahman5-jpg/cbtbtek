@@ -78,8 +78,8 @@ export default function NotifikasiPage() {
             );
           }
 
-          // 2. Card Tutorial Groq AI
-          if (block.includes('🔑') || block.toUpperCase().includes('CARA MUDAH MENGAKTIFKAN GROQ AI')) {
+          // 2. Card Tutorial API Key (Groq AI / Google Gemini)
+          if (block.includes('🔑') || block.toUpperCase().includes('CARA MENGAKTIFKAN') || block.toUpperCase().includes('LANGKAH-LANGKAH MENDAPATKAN')) {
             const lines = block.split('\n').filter(Boolean);
             const title = lines[0].replace(/🔑/g, '').trim();
             const steps = lines.slice(1);
@@ -97,7 +97,7 @@ export default function NotifikasiPage() {
                     const matchNumber = st.match(/^\d+\.\s*/);
                     const cleanStep = matchNumber ? st.replace(/^\d+\.\s*/, '') : st;
                     
-                    // Render link & code gsk_
+                    // Render link & code
                     const renderInlineFormatting = (text: string) => {
                       const urlRegex = /(https?:\/\/[^\s]+)/g;
                       const parts = text.split(urlRegex);
@@ -115,10 +115,10 @@ export default function NotifikasiPage() {
                             </a>
                           );
                         }
-                        if (part.includes('"gsk_..."') || part.includes('gsk_...')) {
+                        if (part.includes('"AIza..."') || part.includes('AIza...') || part.includes('"gsk_..."') || part.includes('gsk_...')) {
                           return (
                             <code key={pIdx} className="bg-purple-100 text-purple-800 font-mono text-xs px-2 py-0.5 rounded font-bold border border-purple-200">
-                              gsk_...
+                              {part}
                             </code>
                           );
                         }
