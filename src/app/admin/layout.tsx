@@ -17,6 +17,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [appName, setAppName] = useState('CBT B-TEK');
+
+  useEffect(() => {
+    const cached = localStorage.getItem('cbt_app_name');
+    if (cached) setAppName(cached);
+
+    const fetchAppName = async () => {
+      const { data } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'nama_aplikasi').maybeSingle();
+      if (data?.nilai) {
+        setAppName(data.nilai);
+        localStorage.setItem('cbt_app_name', data.nilai);
+      }
+    };
+    fetchAppName();
+
+    const handleUpdate = () => {
+      const updated = localStorage.getItem('cbt_app_name');
+      if (updated) setAppName(updated);
+    };
+    window.addEventListener('cbt_settings_updated', handleUpdate);
+    return () => window.removeEventListener('cbt_settings_updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('cbt_user');
@@ -158,11 +180,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
 
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-gradient-to-br from-indigo-500 to-teal-400 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
+          <div className="bg-gradient-to-br from-indigo-500 to-teal-400 p-2 rounded-xl shadow-lg shadow-indigo-500/20 flex-shrink-0">
             <Server size={28} className="text-white" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-white tracking-wide">CBT Admin</h1>
+          <div className="min-w-0">
+            <h1 className="text-base lg:text-lg font-bold text-white tracking-wide truncate" title={appName}>{appName}</h1>
             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Control Panel</p>
           </div>
         </div>
@@ -215,9 +237,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Menu size={24} />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-                {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
-              </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md hidden sm:inline-block">
+                  {appName}
+                </span>
+                <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+                  {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
+                </h2>
+              </div>
             </div>
           </div>
           

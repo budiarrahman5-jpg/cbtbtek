@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Monitor, UserCircle, KeyRound, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,30 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [appName, setAppName] = useState('CBT B-TEK');
   const router = useRouter();
+
+  useEffect(() => {
+    const cached = localStorage.getItem('cbt_app_name');
+    if (cached) {
+      setAppName(cached);
+      document.title = `${cached} - Platform Ujian`;
+    }
+
+    const fetchAppName = async () => {
+      const { data } = await supabase
+        .from('pengaturan')
+        .select('nilai')
+        .eq('kunci', 'nama_aplikasi')
+        .maybeSingle();
+      if (data?.nilai) {
+        setAppName(data.nilai);
+        localStorage.setItem('cbt_app_name', data.nilai);
+        document.title = `${data.nilai} - Platform Ujian`;
+      }
+    };
+    fetchAppName();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +112,7 @@ export default function Home() {
             <Monitor className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg md:text-xl font-bold tracking-wider leading-tight">CBT B-TEK</h1>
+            <h1 className="text-lg md:text-xl font-bold tracking-wider leading-tight">{appName}</h1>
             <p className="text-xs text-blue-200 opacity-80">Platform Ujian Berbasis Komputer</p>
           </div>
         </div>
@@ -161,7 +184,7 @@ export default function Home() {
           
           <div className="text-center mt-8">
             <p className="text-xs text-white/40 font-medium tracking-wide">
-              &copy; 2026 CBT B-TEK by @budhii12
+              &copy; {new Date().getFullYear()} {appName} by @budhii12
             </p>
           </div>
         </div>

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, ChevronDown, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, ChevronDown, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, ShieldCheck, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -226,6 +226,9 @@ export default function UjianPage() {
   // Proteksi Layar & Kode Buka Blokir
   const [proteksiLayar, setProteksiLayar] = useState('ON');
   const [kodeBukaBlokir, setKodeBukaBlokir] = useState('BUKA123');
+  const [proteksiSiswaList, setProteksiSiswaList] = useState<string[]>([]);
+  const [exambroKeywords, setExambroKeywords] = useState('exambro, exam, seb, safeexambrowser, flyexam, kiosk, cbt');
+  const [namaAplikasi, setNamaAplikasi] = useState('');
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [inputKodeBlokir, setInputKodeBlokir] = useState('');
@@ -307,6 +310,21 @@ export default function UjianPage() {
         if (tn) setTampilNilai(tn.nilai);
         const mr = data.find((d: any) => d.kunci === 'mode_review');
         if (mr) setModeReview(mr.nilai);
+        const psl = data.find((d: any) => d.kunci === 'proteksi_siswa_list');
+        if (psl && psl.nilai) {
+          try {
+            setProteksiSiswaList(JSON.parse(psl.nilai));
+          } catch (e) {
+            setProteksiSiswaList([]);
+          }
+        }
+        const ek = data.find((d: any) => d.kunci === 'exambro_keywords');
+        if (ek && ek.nilai) setExambroKeywords(ek.nilai);
+        const na = data.find((d: any) => d.kunci === 'nama_aplikasi');
+        if (na && na.nilai) {
+          setNamaAplikasi(na.nilai);
+          localStorage.setItem('cbt_app_name', na.nilai);
+        }
       }
     };
     fetchConfig();
@@ -491,7 +509,32 @@ export default function UjianPage() {
     return false;
   };
 
+  // Evaluasi apakah proteksi layar aktif untuk siswa saat ini berdasarkan mode pengaturan
+  const isProteksiAktif = useMemo(() => {
+    if (proteksiLayar === 'OFF') return false;
+    if (proteksiLayar === 'ON') return true;
+
+    if (proteksiLayar === 'NON_EXAMBRO') {
+      if (typeof window === 'undefined') return false;
+      const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || '').toLowerCase();
+      const hasExambroProp = !!(window as any).isExamBro || !!(window as any).isExambrowser;
+      const rawKeywords = exambroKeywords || 'exambro, exam, seb, safeexambrowser, flyexam, kiosk, cbt';
+      const keywords = rawKeywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+      const isExambro = hasExambroProp || keywords.some((k: string) => ua.includes(k));
+      // Siswa non-Exambro (misal Chrome / Safari biasa) WAJIB terproteksi web
+      return !isExambro;
+    }
+
+    if (proteksiLayar === 'KHUSUS') {
+      if (!user) return false;
+      return proteksiSiswaList.includes(user.id) || proteksiSiswaList.includes(user.username);
+    }
+
+    return true;
+  }, [proteksiLayar, proteksiSiswaList, exambroKeywords, user]);
+
   const aktivasiFullscreen = async () => {
+    if (!isProteksiAktif) return;
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
@@ -502,6 +545,18 @@ export default function UjianPage() {
       console.log('Fullscreen error:', e);
     }
   };
+
+  useEffect(() => {
+    if (isProteksiAktif && !isBlocked) {
+      aktivasiFullscreen();
+    }
+  }, [isProteksiAktif, isBlocked]);
+
+  useEffect(() => {
+    if (namaAplikasi && paket) {
+      document.title = `${namaAplikasi} - ${paket.nama_paket}`;
+    }
+  }, [namaAplikasi, paket]);
 
   const trgViolation = (alasan: string) => {
     if (isBlocked) return;
@@ -523,7 +578,7 @@ export default function UjianPage() {
     if (!user || !paket) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden && proteksiLayar !== 'OFF') {
+      if (document.hidden && isProteksiAktif) {
         trgViolation('Terdeteksi keluar dari tab ujian atau berpindah aplikasi.');
       }
     };
@@ -531,14 +586,17 @@ export default function UjianPage() {
     const handleFullscreenChange = () => {
       const inFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
       setIsFullscreen(inFs);
-      if (!inFs && proteksiLayar !== 'OFF') {
+      if (!inFs && isProteksiAktif) {
         trgViolation('Terdeteksi keluar dari mode layar penuh (Fullscreen).');
       }
     };
 
-    const handleContextMenu = (e: Event) => e.preventDefault();
+    const handleContextMenu = (e: Event) => {
+      if (isProteksiAktif) e.preventDefault();
+    };
+
     const handleSilentFullscreen = () => {
-      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      if (isProteksiAktif && !document.fullscreenElement && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
     };
@@ -556,7 +614,7 @@ export default function UjianPage() {
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('click', handleSilentFullscreen);
     };
-  }, [user, paket, proteksiLayar, isBlocked]);
+  }, [user, paket, isProteksiAktif, isBlocked]);
 
   const handleBukaBlokir = async () => {
     const entered = inputKodeBlokir.trim().toUpperCase();
@@ -813,8 +871,15 @@ export default function UjianPage() {
             <Laptop className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-sm md:text-lg font-bold tracking-tight text-slate-800 truncate">{paket.nama_paket}</h1>
-            <p className="text-xs text-slate-500 font-medium hidden sm:block">Peserta: {user.nama}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm md:text-lg font-bold tracking-tight text-slate-800 truncate">{paket.nama_paket}</h1>
+              {isProteksiAktif && (
+                <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full" title="Proteksi Layar & Fullscreen Aktif">
+                  <ShieldCheck size={12} /> Terproteksi
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 font-medium hidden sm:block">Peserta: {user.nama} • {namaAplikasi || 'CBT B-TEK'}</p>
           </div>
         </div>
         
@@ -1249,7 +1314,7 @@ export default function UjianPage() {
                   SELAMAT, UJIAN SELESAI!
                 </h1>
                 <p className="text-xs md:text-sm text-slate-500 font-medium mt-1 mb-6">
-                  Seluruh lembar jawaban Anda telah berhasil disimpan dan dinilai oleh sistem CBT B-TEK.
+                  Seluruh lembar jawaban Anda telah berhasil disimpan dan dinilai oleh sistem {namaAplikasi || 'CBT B-TEK'}.
                 </p>
 
                 {/* Kartu Skor Besar Bergradasi */}

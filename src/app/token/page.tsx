@@ -13,9 +13,30 @@ export default function TokenPage() {
   const [token, setToken] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [appName, setAppName] = useState('CBT B-TEK');
   const router = useRouter();
 
   useEffect(() => {
+    const cached = localStorage.getItem('cbt_app_name');
+    if (cached) {
+      setAppName(cached);
+      document.title = `${cached} - Konfirmasi Akses Ujian`;
+    }
+
+    const fetchAppName = async () => {
+      const { data } = await supabase
+        .from('pengaturan')
+        .select('nilai')
+        .eq('kunci', 'nama_aplikasi')
+        .maybeSingle();
+      if (data?.nilai) {
+        setAppName(data.nilai);
+        localStorage.setItem('cbt_app_name', data.nilai);
+        document.title = `${data.nilai} - Konfirmasi Akses Ujian`;
+      }
+    };
+    fetchAppName();
+
     const savedUser = localStorage.getItem('cbt_user');
     if (!savedUser) {
       router.push('/');
@@ -145,8 +166,11 @@ export default function TokenPage() {
         
         <div className="flex justify-between items-center pb-6 border-b border-slate-100 mb-8">
           <div>
+            <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider mb-1">
+              {appName}
+            </span>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight">Konfirmasi Akses Ujian</h2>
-            <p className="text-sm text-slate-500 mt-1">Sistem Ujian Berbasis Komputer</p>
+            <p className="text-sm text-slate-500 mt-0.5">Sistem Ujian Berbasis Komputer</p>
           </div>
           <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg flex items-center gap-2 font-semibold text-sm transition-all">
             <LogOut size={16} /> <span className="hidden md:inline">Keluar</span>
