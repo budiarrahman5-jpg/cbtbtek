@@ -11,7 +11,19 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [appName, setAppName] = useState('CBT B-TEK');
+  const [appLogo, setAppLogo] = useState('/logo.png');
   const router = useRouter();
+
+  const updateFavicon = (url: string) => {
+    if (typeof document === 'undefined') return;
+    let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = url || '/logo.png';
+  };
 
   useEffect(() => {
     const cached = localStorage.getItem('cbt_app_name');
@@ -19,20 +31,30 @@ export default function Home() {
       setAppName(cached);
       document.title = `${cached} - Platform Ujian`;
     }
+    const cachedLogo = localStorage.getItem('cbt_app_logo');
+    if (cachedLogo) {
+      setAppLogo(cachedLogo);
+      updateFavicon(cachedLogo);
+    }
 
-    const fetchAppName = async () => {
-      const { data } = await supabase
-        .from('pengaturan')
-        .select('nilai')
-        .eq('kunci', 'nama_aplikasi')
-        .maybeSingle();
-      if (data?.nilai) {
-        setAppName(data.nilai);
-        localStorage.setItem('cbt_app_name', data.nilai);
-        document.title = `${data.nilai} - Platform Ujian`;
+    const fetchConfig = async () => {
+      const { data } = await supabase.from('pengaturan').select('*');
+      if (data) {
+        const nameItem = data.find((d: any) => d.kunci === 'nama_aplikasi');
+        if (nameItem?.nilai) {
+          setAppName(nameItem.nilai);
+          localStorage.setItem('cbt_app_name', nameItem.nilai);
+          document.title = `${nameItem.nilai} - Platform Ujian`;
+        }
+        const logoItem = data.find((d: any) => d.kunci === 'logo_aplikasi');
+        if (logoItem?.nilai) {
+          setAppLogo(logoItem.nilai);
+          localStorage.setItem('cbt_app_logo', logoItem.nilai);
+          updateFavicon(logoItem.nilai);
+        }
       }
     };
-    fetchAppName();
+    fetchConfig();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -108,8 +130,13 @@ export default function Home() {
       {/* Header */}
       <header className="relative z-10 bg-white/10 backdrop-blur-lg border-b border-white/10 text-white p-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-tr from-indigo-500 to-teal-400 p-2 rounded-lg shadow-lg">
-            <Monitor className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/20 p-1 flex items-center justify-center shadow-lg border border-white/20 flex-shrink-0">
+            <img 
+              src={appLogo} 
+              alt="Logo" 
+              className="w-full h-full object-contain aspect-square" 
+              onError={(e) => { (e.target as any).src = '/logo.png'; }} 
+            />
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-bold tracking-wider leading-tight">{appName}</h1>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen, Sparkles, Camera, Upload, Check, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen, Sparkles, Camera, Upload, Check, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, CheckCircle2, Printer, CreditCard, Eye, EyeOff, SlidersHorizontal, Image as ImageIcon } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function KelolaSiswaPage() {
@@ -46,12 +46,42 @@ export default function KelolaSiswaPage() {
 
   const [isDemo, setIsDemo] = useState(false);
 
+  // State Cetak Kartu Peserta Ujian (Format 8 Kartu per A4)
+  const [modalKartu, setModalKartu] = useState(false);
+  const [appLogo, setAppLogo] = useState('/logo.png');
+  const [appNama, setAppNama] = useState('CBT B-TEK');
+  const [filterKelasKartu, setFilterKelasKartu] = useState('ALL');
+  const [searchKartu, setSearchKartu] = useState('');
+  const [showConfigKartu, setShowConfigKartu] = useState(false);
+  const [kartuConfig, setKartuConfig] = useState({
+    namaSekolah: 'SMK / SMA / SMP CBT B-TEK',
+    judulUjian: 'KARTU PESERTA ASESMEN SUMATIF',
+    subJudul: 'TAHUN AJARAN 2025/2026',
+    ruangSesi: 'Sesi 1 / Lab CBT',
+    namaPenandatangan: 'Ketua Panitia Ujian',
+    nipPenandatangan: '19820515 200801 1 005',
+    kotaTanggal: `Jakarta, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    tampilkanPassword: true,
+    catatanBawah: '*Bawa kartu ini selama ujian & jaga kerahasiaan login.',
+    customLogoUrl: ''
+  });
+
   useEffect(() => {
     fetchData();
     const savedUser = localStorage.getItem('cbt_user');
     if (savedUser) {
       const user = JSON.parse(savedUser);
       setIsDemo(user?.username?.startsWith('demo_admin_'));
+    }
+
+    // Muat preferensi kartu peserta jika ada
+    try {
+      const savedKartuConfig = localStorage.getItem('cbt_kartu_config');
+      if (savedKartuConfig) {
+        setKartuConfig(prev => ({ ...prev, ...JSON.parse(savedKartuConfig) }));
+      }
+    } catch (e) {
+      console.error(e);
     }
   }, []);
 
@@ -72,6 +102,27 @@ export default function KelolaSiswaPage() {
       
     dataSiswa = filterDemoData(dataSiswa, 'siswa');
     if (dataSiswa) setSiswa(dataSiswa);
+
+    // Fetch Pengaturan Logo & Nama Sekolah
+    try {
+      const { data: dataSetting } = await supabase.from('pengaturan').select('*');
+      if (dataSetting) {
+        const settingObj: Record<string, string> = {};
+        dataSetting.forEach(item => {
+          settingObj[item.kunci] = item.nilai;
+        });
+        if (settingObj.logo_aplikasi) setAppLogo(settingObj.logo_aplikasi);
+        if (settingObj.nama_aplikasi) {
+          setAppNama(settingObj.nama_aplikasi);
+          setKartuConfig(prev => ({
+            ...prev,
+            namaSekolah: prev.namaSekolah === 'SMK / SMA / SMP CBT B-TEK' ? settingObj.nama_aplikasi : prev.namaSekolah
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Gagal mengambil logo/nama aplikasi:', e);
+    }
       
     setIsLoading(false);
   };
@@ -870,18 +921,38 @@ export default function KelolaSiswaPage() {
       {/* Memperbarui desain tabel bawah */}
       <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
         <div className="p-5 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-          <h2 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-            <Users size={20} className="text-indigo-600"/> Direktori Siswa
-          </h2>
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Cari berdasarkan nama atau username..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-11 pr-4 py-3 w-full border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-medium text-sm transition-all"
-            />
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
+              <Users size={20} className="text-indigo-600"/> Direktori Siswa
+            </h2>
+            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
+              {siswa.length} Siswa
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <button
+              onClick={() => {
+                setFilterKelasKartu('ALL');
+                setSearchKartu('');
+                setModalKartu(true);
+              }}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-600/25 text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <CreditCard size={16} />
+              <span>Cetak Kartu Ujian (A4)</span>
+            </button>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Cari nama atau username..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-3 py-2.5 w-full border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none font-medium text-xs transition-all bg-white"
+              />
+            </div>
           </div>
         </div>
 
@@ -950,6 +1021,693 @@ export default function KelolaSiswaPage() {
           </table>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL CETAK KARTU PESERTA UJIAN (FORMAT 8 KARTU PER LEMBAR A4) */}
+      {/* ========================================================================= */}
+      {modalKartu && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-start items-center overflow-y-auto p-2 sm:p-4 md:p-6 no-print">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
+            
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-600 rounded-xl shadow-md">
+                  <CreditCard className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base sm:text-lg">Cetak Kartu Peserta Ujian</h3>
+                  <p className="text-xs text-slate-300 font-medium">Format 8 Kartu per Lembar A4 (2 Kolom x 4 Baris) • Hemat Kertas & Siap Gunting</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigKartu(!showConfigKartu)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                    showConfigKartu 
+                      ? 'bg-indigo-600 text-white border-indigo-500' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <SlidersHorizontal size={14} />
+                  <span>{showConfigKartu ? 'Tutup Pengaturan' : 'Pengaturan Kop & Kartu'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalKartu(false)}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Panel Pengaturan Kop & Kartu (Expandable) */}
+            {showConfigKartu && (
+              <div className="bg-slate-50 border-b border-slate-200 p-4 sm:p-5 text-xs space-y-4 flex-shrink-0 animate-in fade-in duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Nama Instansi / Sekolah</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.namaSekolah}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, namaSekolah: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="SMP / SMA / SMK CBT B-TEK"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Judul Ujian</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.judulUjian}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, judulUjian: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="KARTU PESERTA ASESMEN SUMATIF"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tahun Ajaran / Semester</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.subJudul}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, subJudul: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="TAHUN AJARAN 2025/2026"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Ruang / Sesi</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.ruangSesi}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, ruangSesi: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="Sesi 1 / Lab CBT"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Kota & Tanggal Cetak</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.kotaTanggal}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, kotaTanggal: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="Jakarta, 5 Oktober 2026"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Nama Penandatangan / Panitia</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.namaPenandatangan}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, namaPenandatangan: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="Ketua Panitia Ujian"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Kustom Logo URL (Opsional)</label>
+                    <input
+                      type="text"
+                      value={kartuConfig.customLogoUrl}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, customLogoUrl: e.target.value };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-full border border-slate-300 rounded-lg p-2 font-medium bg-white focus:border-indigo-500 outline-none"
+                      placeholder="Kosongkan untuk pakai Logo Aplikasi"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-200">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                    <input
+                      type="checkbox"
+                      checked={kartuConfig.tampilkanPassword}
+                      onChange={e => {
+                        const newCfg = { ...kartuConfig, tampilkanPassword: e.target.checked };
+                        setKartuConfig(newCfg);
+                        localStorage.setItem('cbt_kartu_config', JSON.stringify(newCfg));
+                      }}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>Tampilkan Password Siswa di Kartu</span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const resetCfg = {
+                          namaSekolah: appNama || 'SMK / SMA / SMP CBT B-TEK',
+                          judulUjian: 'KARTU PESERTA ASESMEN SUMATIF',
+                          subJudul: 'TAHUN AJARAN 2025/2026',
+                          ruangSesi: 'Sesi 1 / Lab CBT',
+                          namaPenandatangan: 'Ketua Panitia Ujian',
+                          nipPenandatangan: '19820515 200801 1 005',
+                          kotaTanggal: `Jakarta, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+                          tampilkanPassword: true,
+                          catatanBawah: '*Bawa kartu ini selama ujian & jaga kerahasiaan login.',
+                          customLogoUrl: ''
+                        };
+                        setKartuConfig(resetCfg);
+                        localStorage.removeItem('cbt_kartu_config');
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
+                    >
+                      Reset Pengaturan ke Default
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filter & Toolbar Modal */}
+            <div className="p-4 bg-white border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Filter Kelas:</span>
+                  <select
+                    value={filterKelasKartu}
+                    onChange={e => setFilterKelasKartu(e.target.value)}
+                    className="border-2 border-slate-200 text-xs font-bold rounded-xl px-3 py-2 bg-slate-50 focus:border-indigo-500 outline-none text-slate-700"
+                  >
+                    <option value="ALL">Semua Kelas ({siswa.length} Siswa)</option>
+                    {kelas.map(k => {
+                      const count = siswa.filter(s => s.kelas_id === k.id).length;
+                      return (
+                        <option key={k.id} value={k.id}>
+                          {k.nama_kelas} ({count} Siswa)
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Saring nama / username..."
+                    value={searchKartu}
+                    onChange={e => setSearchKartu(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border border-slate-200 text-xs rounded-xl focus:border-indigo-500 outline-none w-48 bg-slate-50"
+                  />
+                </div>
+              </div>
+
+              {/* Status & Tombol Print */}
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                {(() => {
+                  const filteredForPrint = siswa.filter(s => {
+                    const matchKls = filterKelasKartu === 'ALL' || s.kelas_id === filterKelasKartu;
+                    const matchSrch = !searchKartu || 
+                      s.nama?.toLowerCase().includes(searchKartu.toLowerCase()) || 
+                      s.username?.toLowerCase().includes(searchKartu.toLowerCase());
+                    return matchKls && matchSrch;
+                  });
+                  const totalLembar = Math.ceil(filteredForPrint.length / 8);
+
+                  return (
+                    <>
+                      <div className="text-right">
+                        <div className="text-xs font-extrabold text-slate-800">
+                          {filteredForPrint.length} Siswa Terpilih
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          {totalLembar} Lembar A4 (Format 8/Lembar)
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        disabled={filteredForPrint.length === 0}
+                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-black px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 text-xs flex items-center gap-2 transition-all active:scale-95 flex-shrink-0"
+                      >
+                        <Printer size={16} />
+                        <span>Cetak / Simpan PDF</span>
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Area Pratinjau Lembar A4 di Layar */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 custom-scrollbar flex flex-col items-center gap-6">
+              {(() => {
+                const targetSiswa = siswa.filter(s => {
+                  const matchKls = filterKelasKartu === 'ALL' || s.kelas_id === filterKelasKartu;
+                  const matchSrch = !searchKartu || 
+                    s.nama?.toLowerCase().includes(searchKartu.toLowerCase()) || 
+                    s.username?.toLowerCase().includes(searchKartu.toLowerCase());
+                  return matchKls && matchSrch;
+                });
+
+                if (targetSiswa.length === 0) {
+                  return (
+                    <div className="bg-white p-12 rounded-2xl shadow text-center max-w-md my-auto">
+                      <CreditCard className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                      <h4 className="font-extrabold text-slate-700 text-base">Tidak Ada Siswa Terpilih</h4>
+                      <p className="text-xs text-slate-400 mt-1">Silakan sesuaikan filter kelas atau kata kunci pencarian di atas.</p>
+                    </div>
+                  );
+                }
+
+                // Chunking 8 kartu per halaman
+                const pages: any[][] = [];
+                for (let i = 0; i < targetSiswa.length; i += 8) {
+                  pages.push(targetSiswa.slice(i, i + 8));
+                }
+
+                const effectiveLogo = kartuConfig.customLogoUrl || appLogo || '/logo.png';
+
+                return pages.map((pageSiswa, pageIdx) => (
+                  <div key={pageIdx} className="w-full flex flex-col items-center">
+                    <div className="text-[11px] font-bold text-slate-500 mb-2 self-start max-w-[210mm] w-full px-1 flex justify-between">
+                      <span>📄 Halaman {pageIdx + 1} dari {pages.length}</span>
+                      <span>{pageSiswa.length} Kartu</span>
+                    </div>
+
+                    {/* Simulasi Lembar A4 */}
+                    <div 
+                      className="bg-white shadow-2xl border border-slate-300 rounded-sm p-4 w-full max-w-[210mm] min-h-[297mm] grid grid-cols-1 sm:grid-cols-2 gap-3"
+                      style={{
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {pageSiswa.map((s) => (
+                        <div 
+                          key={s.id} 
+                          className="border border-dashed border-slate-400 rounded-lg p-2.5 flex flex-col justify-between bg-white relative text-slate-800"
+                          style={{ minHeight: '66mm' }}
+                        >
+                          {/* Kop Kartu */}
+                          <div>
+                            <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-1.5 mb-2">
+                              {/* Logo Persegi aspect-square */}
+                              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-slate-50 rounded border border-slate-200 overflow-hidden">
+                                <img
+                                  src={effectiveLogo}
+                                  alt="Logo"
+                                  className="w-full h-full object-contain aspect-square"
+                                  onError={(e) => { (e.target as any).src = '/logo.png'; }}
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0 text-center pr-1">
+                                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-900 truncate leading-tight">
+                                  {kartuConfig.namaSekolah}
+                                </h4>
+                                <h5 className="text-[9px] font-extrabold uppercase text-indigo-700 tracking-wide leading-tight">
+                                  {kartuConfig.judulUjian}
+                                </h5>
+                                <p className="text-[7.5px] font-semibold text-slate-500 leading-tight">
+                                  {kartuConfig.subJudul}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Badan Data Siswa */}
+                            <div className="flex gap-2.5 items-start mt-1">
+                              {/* Kotak Pas Foto Persegi Panjang 2x3 */}
+                              <div className="w-12 h-16 flex-shrink-0 border border-slate-300 rounded bg-slate-50 flex flex-col items-center justify-center text-[7px] font-bold text-slate-400 p-1 text-center shadow-inner">
+                                <ImageIcon size={14} className="mb-0.5 text-slate-300" />
+                                <span>FOTO</span>
+                                <span>2x3</span>
+                              </div>
+
+                              {/* Tabel Info Siswa */}
+                              <div className="flex-1 min-w-0 text-[8.5px] space-y-0.5">
+                                <div className="flex">
+                                  <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Nama</span>
+                                  <span className="font-bold text-slate-400 mr-1">:</span>
+                                  <span className="font-black text-slate-900 truncate uppercase">{s.nama}</span>
+                                </div>
+                                <div className="flex">
+                                  <span className="w-16 font-semibold text-slate-500 flex-shrink-0">No. Peserta</span>
+                                  <span className="font-bold text-slate-400 mr-1">:</span>
+                                  <span className="font-mono font-bold text-indigo-800">{s.username}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Password</span>
+                                  <span className="font-bold text-slate-400 mr-1">:</span>
+                                  <span className="font-mono font-black text-slate-800 bg-slate-100 px-1 py-0.2 rounded border border-slate-200">
+                                    {kartuConfig.tampilkanPassword ? s.password : '••••••••'}
+                                  </span>
+                                </div>
+                                <div className="flex">
+                                  <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Kelas</span>
+                                  <span className="font-bold text-slate-400 mr-1">:</span>
+                                  <span className="font-bold text-slate-700 uppercase">{s.kelas?.nama_kelas || '-'}</span>
+                                </div>
+                                <div className="flex">
+                                  <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Ruang/Sesi</span>
+                                  <span className="font-bold text-slate-400 mr-1">:</span>
+                                  <span className="font-semibold text-slate-600">{kartuConfig.ruangSesi}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Kartu & Tanda Tangan */}
+                          <div className="mt-2 pt-1 border-t border-slate-200 flex justify-between items-end text-[7px]">
+                            <div className="text-slate-400 italic max-w-[50%] leading-tight">
+                              {kartuConfig.catatanBawah}
+                            </div>
+                            <div className="text-right leading-tight">
+                              <p className="text-slate-500">{kartuConfig.kotaTanggal}</p>
+                              <p className="font-bold text-slate-700">{kartuConfig.namaPenandatangan}</p>
+                              <div className="h-4"></div>
+                              <p className="font-bold text-slate-800">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* ELEMEN KHUSUS CETAK SAAT WINDOW.PRINT() DIJALANKAN */}
+      {/* ========================================================================= */}
+      <div className="hidden print-cards-container">
+        {(() => {
+          const targetSiswa = siswa.filter(s => {
+            const matchKls = filterKelasKartu === 'ALL' || s.kelas_id === filterKelasKartu;
+            const matchSrch = !searchKartu || 
+              s.nama?.toLowerCase().includes(searchKartu.toLowerCase()) || 
+              s.username?.toLowerCase().includes(searchKartu.toLowerCase());
+            return matchKls && matchSrch;
+          });
+
+          // Bagi tepat 8 siswa per lembar A4
+          const pages: any[][] = [];
+          for (let i = 0; i < targetSiswa.length; i += 8) {
+            pages.push(targetSiswa.slice(i, i + 8));
+          }
+
+          const effectiveLogo = kartuConfig.customLogoUrl || appLogo || '/logo.png';
+
+          return pages.map((pageSiswa, pageIdx) => (
+            <div 
+              key={pageIdx} 
+              className="a4-print-sheet"
+              style={{
+                pageBreakAfter: pageIdx === pages.length - 1 ? 'auto' : 'always',
+                breakAfter: pageIdx === pages.length - 1 ? 'auto' : 'page',
+              }}
+            >
+              {pageSiswa.map((s) => (
+                <div 
+                  key={s.id} 
+                  className="card-item-print"
+                >
+                  {/* Kop Kartu */}
+                  <div>
+                    <div className="card-header-print">
+                      {/* Logo Persegi aspect-square */}
+                      <div className="card-logo-container">
+                        <img
+                          src={effectiveLogo}
+                          alt="Logo"
+                          className="card-logo-img"
+                          onError={(e) => { (e.target as any).src = '/logo.png'; }}
+                        />
+                      </div>
+                      <div className="card-header-text">
+                        <div className="card-title-school">{kartuConfig.namaSekolah}</div>
+                        <div className="card-title-exam">{kartuConfig.judulUjian}</div>
+                        <div className="card-subtitle">{kartuConfig.subJudul}</div>
+                      </div>
+                    </div>
+
+                    {/* Data Siswa */}
+                    <div className="card-body-print">
+                      <div className="card-photo-box">
+                        <span>FOTO</span>
+                        <span>2x3</span>
+                      </div>
+
+                      <div className="card-details-print">
+                        <div className="detail-row">
+                          <span className="detail-label">Nama</span>
+                          <span className="detail-colon">:</span>
+                          <span className="detail-val font-bold uppercase">{s.nama}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">No. Peserta</span>
+                          <span className="detail-colon">:</span>
+                          <span className="detail-val font-mono font-bold text-indigo">{s.username}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Password</span>
+                          <span className="detail-colon">:</span>
+                          <span className="detail-val font-mono">
+                            {kartuConfig.tampilkanPassword ? s.password : '••••••••'}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Kelas</span>
+                          <span className="detail-colon">:</span>
+                          <span className="detail-val uppercase">{s.kelas?.nama_kelas || '-'}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-label">Ruang/Sesi</span>
+                          <span className="detail-colon">:</span>
+                          <span className="detail-val">{kartuConfig.ruangSesi}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer Kartu & Tanda Tangan */}
+                  <div className="card-footer-print">
+                    <div className="card-notes">
+                      {kartuConfig.catatanBawah}
+                    </div>
+                    <div className="card-signature">
+                      <div>{kartuConfig.kotaTanggal}</div>
+                      <div className="sig-title">{kartuConfig.namaPenandatangan}</div>
+                      <div className="sig-space"></div>
+                      <div>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ));
+        })()}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* CSS KHUSUS PRINT A4 DENGAN FORMAT 8 KARTU PER LEMBAR (2 KOLOM X 4 BARIS) */}
+      {/* ========================================================================= */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 6mm;
+          }
+          body {
+            background: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          header, aside, nav, .no-print, button, input {
+            display: none !important;
+          }
+          .print-cards-container {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .a4-print-sheet {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            grid-template-rows: repeat(4, 1fr) !important;
+            gap: 2.5mm !important;
+            width: 198mm !important;
+            height: 284mm !important;
+            max-height: 284mm !important;
+            box-sizing: border-box !important;
+            margin: 0 auto !important;
+          }
+          .card-item-print {
+            border: 1px dashed #64748b !important;
+            border-radius: 4px !important;
+            padding: 2.2mm 2.5mm !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            background: #ffffff !important;
+            height: 100% !important;
+          }
+          .card-header-print {
+            display: flex !important;
+            align-items: center !important;
+            gap: 2mm !important;
+            border-bottom: 1.5px solid #0f172a !important;
+            padding-bottom: 1.5mm !important;
+            margin-bottom: 1.5mm !important;
+          }
+          .card-logo-container {
+            width: 11mm !important;
+            height: 11mm !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .card-logo-img {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            aspect-ratio: 1 / 1 !important;
+          }
+          .card-header-text {
+            flex: 1 !important;
+            text-align: center !important;
+            line-height: 1.15 !important;
+          }
+          .card-title-school {
+            font-size: 8.5pt !important;
+            font-weight: 900 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.3px !important;
+            color: #0f172a !important;
+          }
+          .card-title-exam {
+            font-size: 7.5pt !important;
+            font-weight: 800 !important;
+            text-transform: uppercase !important;
+            color: #312e81 !important;
+          }
+          .card-subtitle {
+            font-size: 6.5pt !important;
+            font-weight: 600 !important;
+            color: #475569 !important;
+          }
+          .card-body-print {
+            display: flex !important;
+            gap: 2.5mm !important;
+            align-items: flex-start !important;
+            margin-top: 1mm !important;
+          }
+          .card-photo-box {
+            width: 13mm !important;
+            height: 17mm !important;
+            flex-shrink: 0 !important;
+            border: 1px solid #94a3b8 !important;
+            background: #f8fafc !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 6pt !important;
+            font-weight: 700 !important;
+            color: #94a3b8 !important;
+            line-height: 1.1 !important;
+          }
+          .card-details-print {
+            flex: 1 !important;
+            font-size: 7pt !important;
+            line-height: 1.3 !important;
+          }
+          .detail-row {
+            display: flex !important;
+            align-items: center !important;
+          }
+          .detail-label {
+            width: 16mm !important;
+            color: #475569 !important;
+            flex-shrink: 0 !important;
+          }
+          .detail-colon {
+            margin-right: 1mm !important;
+            color: #94a3b8 !important;
+            font-weight: bold !important;
+          }
+          .detail-val {
+            color: #0f172a !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+          .detail-val.font-bold {
+            font-weight: 800 !important;
+          }
+          .detail-val.text-indigo {
+            color: #312e81 !important;
+          }
+          .card-footer-print {
+            border-top: 0.8px solid #cbd5e1 !important;
+            padding-top: 1mm !important;
+            margin-top: 1.5mm !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-end !important;
+            font-size: 5.8pt !important;
+          }
+          .card-notes {
+            font-style: italic !important;
+            color: #64748b !important;
+            max-width: 52% !important;
+            line-height: 1.15 !important;
+          }
+          .card-signature {
+            text-align: right !important;
+            line-height: 1.15 !important;
+          }
+          .sig-title {
+            font-weight: 700 !important;
+            color: #1e293b !important;
+          }
+          .sig-space {
+            height: 4mm !important;
+          }
+        }
+      `}} />
     </div>
   );
 }

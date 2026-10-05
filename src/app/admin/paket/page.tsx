@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Package, Plus, Save, Trash2, Eye, X, CheckCircle2 } from 'lucide-react';
+import { Package, Plus, Save, Trash2, Eye, X, CheckCircle2, Edit2 } from 'lucide-react';
 
 export default function KelolaPaketPage() {
   const [paket, setPaket] = useState<any[]>([]);
@@ -16,6 +16,10 @@ export default function KelolaPaketPage() {
   const [deskripsi, setDeskripsi] = useState('');
   const [durasi, setDurasi] = useState(60);
   const [token, setToken] = useState('');
+
+  // Edit states
+  const [editPaketData, setEditPaketData] = useState<any>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Pratinjau states
   const [previewPaket, setPreviewPaket] = useState<any>(null);
@@ -88,6 +92,33 @@ export default function KelolaPaketPage() {
     if (!confirm('Yakin ingin memindahkan paket ini ke menu Bank Soal (Arsip)?')) return;
     await supabase.from('paket').update({ status: 'Diarsipkan' }).eq('id', id);
     fetchPaket();
+  };
+
+  const simpanEditPaket = async () => {
+    if (isDemo) {
+      alert('Akun Demo tidak bisa mengubah paket.');
+      return;
+    }
+    if (!editPaketData?.nama_paket?.trim()) {
+      alert('Nama Paket tidak boleh kosong!');
+      return;
+    }
+    setIsSavingEdit(true);
+    const { error } = await supabase.from('paket').update({
+      nama_paket: editPaketData.nama_paket.trim(),
+      deskripsi: editPaketData.deskripsi || '',
+      durasi_menit: Number(editPaketData.durasi_menit) || 60,
+      token: (editPaketData.token || '').toUpperCase()
+    }).eq('id', editPaketData.id);
+
+    setIsSavingEdit(false);
+    if (error) {
+      alert('Gagal mengedit paket: ' + error.message);
+    } else {
+      alert('Nama paket dan detail berhasil diperbarui!');
+      setEditPaketData(null);
+      fetchPaket();
+    }
   };
 
   const openPratinjau = async (p: any) => {
@@ -203,6 +234,9 @@ export default function KelolaPaketPage() {
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex items-center justify-center gap-2">
+                      <button onClick={() => setEditPaketData({ ...p })} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-2 rounded transition-colors" title="Ubah Nama Paket & Detail">
+                        <Edit2 size={18} />
+                      </button>
                       <button onClick={() => openPratinjau(p)} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 p-2 rounded transition-colors" title="Pratinjau Soal">
                         <Eye size={18} />
                       </button>
@@ -357,6 +391,98 @@ export default function KelolaPaketPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDIT DETAIL / NAMA PAKET */}
+      {editPaketData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-50 border-b border-slate-200 p-5 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                <Edit2 size={20} className="text-amber-600" /> Edit Detail Paket Ujian
+              </h3>
+              <button 
+                onClick={() => setEditPaketData(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  Nama Paket Ujian <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  value={editPaketData.nama_paket} 
+                  onChange={e => setEditPaketData({ ...editPaketData, nama_paket: e.target.value })}
+                  className="w-full border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 outline-none font-bold text-slate-800 text-sm"
+                  placeholder="Contoh: Penilaian Akhir Semester (PAS)"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Token Ujian
+                  </label>
+                  <input 
+                    type="text" 
+                    value={editPaketData.token} 
+                    onChange={e => setEditPaketData({ ...editPaketData, token: e.target.value.toUpperCase() })}
+                    className="w-full border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 outline-none font-bold text-indigo-700 uppercase text-sm"
+                    placeholder="TOKEN"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Durasi (Menit)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={editPaketData.durasi_menit} 
+                    onChange={e => setEditPaketData({ ...editPaketData, durasi_menit: e.target.value })}
+                    min="1"
+                    className="w-full border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 outline-none font-bold text-slate-800 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  Deskripsi / Catatan (Opsional)
+                </label>
+                <textarea 
+                  value={editPaketData.deskripsi || ''} 
+                  onChange={e => setEditPaketData({ ...editPaketData, deskripsi: e.target.value })}
+                  rows={3}
+                  className="w-full border-2 border-slate-200 p-3 rounded-xl focus:border-indigo-500 outline-none text-slate-700 text-xs resize-none"
+                  placeholder="Deskripsi singkat paket ujian..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button 
+                type="button"
+                onClick={() => setEditPaketData(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 font-bold text-xs text-slate-600 hover:bg-slate-100 transition"
+              >
+                Batal
+              </button>
+              <button 
+                type="button"
+                onClick={simpanEditPaket}
+                disabled={isSavingEdit}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs text-white shadow-md flex items-center gap-2 transition active:scale-95 disabled:opacity-50"
+              >
+                <Save size={16} /> {isSavingEdit ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </button>
             </div>
           </div>
         </div>

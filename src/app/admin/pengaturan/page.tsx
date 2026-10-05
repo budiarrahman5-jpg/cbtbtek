@@ -8,6 +8,7 @@ import clsx from 'clsx';
 export default function PengaturanPage() {
   const [settings, setSettings] = useState<Record<string, string>>({
     nama_aplikasi: '',
+    logo_aplikasi: '/logo.png',
     tampil_nilai: 'ON',
     mode_review: 'OFF',
     acak_soal: 'ON',
@@ -124,7 +125,21 @@ export default function PengaturanPage() {
       alert('Gagal menyimpan pengaturan.');
     } else {
       const appName = settings.nama_aplikasi?.trim() || 'CBT B-TEK';
+      const appLogo = settings.logo_aplikasi?.trim() || '/logo.png';
       localStorage.setItem('cbt_app_name', appName);
+      localStorage.setItem('cbt_app_logo', appLogo);
+
+      // Update favicon browser secara dinamis
+      if (typeof document !== 'undefined') {
+        let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.head.appendChild(link);
+        }
+        link.href = appLogo;
+      }
+
       window.dispatchEvent(new Event('cbt_settings_updated'));
       alert('Pengaturan berhasil disimpan!');
     }
@@ -225,13 +240,47 @@ export default function PengaturanPage() {
       </div>
 
       <div className="space-y-5 pt-2">
-        <div>
-          <label className="block font-bold text-sm mb-1 text-gray-700">Nama Aplikasi Ujian</label>
-          <input 
-            type="text" 
-            value={settings.nama_aplikasi} onChange={e=>handleChange('nama_aplikasi', e.target.value)}
-            className="w-full border-2 p-3 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none font-semibold text-gray-800" 
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-bold text-sm mb-1 text-gray-700">Nama Aplikasi Ujian</label>
+            <input 
+              type="text" 
+              value={settings.nama_aplikasi} 
+              onChange={e=>handleChange('nama_aplikasi', e.target.value)}
+              placeholder="Contoh: CBT B-TEK"
+              className="w-full border-2 p-3 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none font-semibold text-gray-800" 
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-sm text-gray-700">Logo Aplikasi (Persegi & Favicon)</label>
+              <button 
+                type="button" 
+                onClick={() => handleChange('logo_aplikasi', '/logo.png')}
+                className="text-[11px] font-bold text-indigo-600 hover:underline"
+              >
+                Gunakan Logo Default
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl border-2 border-slate-200 bg-slate-50 p-1 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-inner">
+                <img 
+                  src={settings.logo_aplikasi || '/logo.png'} 
+                  alt="Logo Preview" 
+                  className="w-full h-full object-contain aspect-square"
+                  onError={(e) => { (e.target as any).src = '/logo.png'; }}
+                />
+              </div>
+              <input 
+                type="text" 
+                value={settings.logo_aplikasi || ''} 
+                onChange={e=>handleChange('logo_aplikasi', e.target.value)}
+                placeholder="/logo.png atau URL Gambar"
+                className="flex-1 border-2 p-3 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none font-medium text-xs text-gray-800" 
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">Logo berbentuk persegi. Otomatis mengubah tampilan di halaman login, ujian, sidebar, kartu peserta, dan favicon browser.</p>
+          </div>
         </div>
         
         <div>

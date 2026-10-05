@@ -14,28 +14,50 @@ export default function TokenPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [appName, setAppName] = useState('CBT B-TEK');
+  const [appLogo, setAppLogo] = useState('/logo.png');
   const router = useRouter();
 
+  const updateFavicon = (url: string) => {
+    if (typeof document === 'undefined') return;
+    let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = url || '/logo.png';
+  };
+
   useEffect(() => {
-    const cached = localStorage.getItem('cbt_app_name');
-    if (cached) {
-      setAppName(cached);
-      document.title = `${cached} - Konfirmasi Akses Ujian`;
+    const cachedName = localStorage.getItem('cbt_app_name');
+    if (cachedName) {
+      setAppName(cachedName);
+      document.title = `${cachedName} - Konfirmasi Akses Ujian`;
+    }
+    const cachedLogo = localStorage.getItem('cbt_app_logo');
+    if (cachedLogo) {
+      setAppLogo(cachedLogo);
+      updateFavicon(cachedLogo);
     }
 
-    const fetchAppName = async () => {
-      const { data } = await supabase
-        .from('pengaturan')
-        .select('nilai')
-        .eq('kunci', 'nama_aplikasi')
-        .maybeSingle();
-      if (data?.nilai) {
-        setAppName(data.nilai);
-        localStorage.setItem('cbt_app_name', data.nilai);
-        document.title = `${data.nilai} - Konfirmasi Akses Ujian`;
+    const fetchConfig = async () => {
+      const { data } = await supabase.from('pengaturan').select('*');
+      if (data) {
+        const nameItem = data.find((d: any) => d.kunci === 'nama_aplikasi');
+        if (nameItem?.nilai) {
+          setAppName(nameItem.nilai);
+          localStorage.setItem('cbt_app_name', nameItem.nilai);
+          document.title = `${nameItem.nilai} - Konfirmasi Akses Ujian`;
+        }
+        const logoItem = data.find((d: any) => d.kunci === 'logo_aplikasi');
+        if (logoItem?.nilai) {
+          setAppLogo(logoItem.nilai);
+          localStorage.setItem('cbt_app_logo', logoItem.nilai);
+          updateFavicon(logoItem.nilai);
+        }
       }
     };
-    fetchAppName();
+    fetchConfig();
 
     const savedUser = localStorage.getItem('cbt_user');
     if (!savedUser) {
@@ -165,12 +187,22 @@ export default function TokenPage() {
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-teal-400 to-indigo-500 rounded-t-2xl"></div>
         
         <div className="flex justify-between items-center pb-6 border-b border-slate-100 mb-8">
-          <div>
-            <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider mb-1">
-              {appName}
-            </span>
-            <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight">Konfirmasi Akses Ujian</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Sistem Ujian Berbasis Komputer</p>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl border border-slate-200 bg-slate-50 p-1 flex items-center justify-center shadow-sm flex-shrink-0">
+              <img 
+                src={appLogo} 
+                alt="Logo" 
+                className="w-full h-full object-contain aspect-square" 
+                onError={(e) => { (e.target as any).src = '/logo.png'; }} 
+              />
+            </div>
+            <div>
+              <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider mb-0.5">
+                {appName}
+              </span>
+              <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 tracking-tight">Konfirmasi Akses Ujian</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Sistem Ujian Berbasis Komputer</p>
+            </div>
           </div>
           <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg flex items-center gap-2 font-semibold text-sm transition-all">
             <LogOut size={16} /> <span className="hidden md:inline">Keluar</span>

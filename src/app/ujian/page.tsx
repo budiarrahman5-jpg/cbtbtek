@@ -229,7 +229,19 @@ export default function UjianPage() {
   const [proteksiSiswaList, setProteksiSiswaList] = useState<string[]>([]);
   const [exambroKeywords, setExambroKeywords] = useState('exambro, exam, seb, safeexambrowser, flyexam, kiosk, cbt');
   const [namaAplikasi, setNamaAplikasi] = useState('');
+  const [appLogo, setAppLogo] = useState('/logo.png');
   const [isBlocked, setIsBlocked] = useState(false);
+
+  const updateFavicon = (url: string) => {
+    if (typeof document === 'undefined') return;
+    let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = url || '/logo.png';
+  };
   const [blockReason, setBlockReason] = useState('');
   const [inputKodeBlokir, setInputKodeBlokir] = useState('');
   const [blokirError, setBlokirError] = useState('');
@@ -324,6 +336,12 @@ export default function UjianPage() {
         if (na && na.nilai) {
           setNamaAplikasi(na.nilai);
           localStorage.setItem('cbt_app_name', na.nilai);
+        }
+        const la = data.find((d: any) => d.kunci === 'logo_aplikasi');
+        if (la && la.nilai) {
+          setAppLogo(la.nilai);
+          localStorage.setItem('cbt_app_logo', la.nilai);
+          updateFavicon(la.nilai);
         }
       }
     };
@@ -867,8 +885,13 @@ export default function UjianPage() {
       {/* Premium Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 p-3 md:p-4 shadow-sm flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="bg-indigo-600 p-2 rounded-lg shadow-md shadow-indigo-600/20 hidden sm:block">
-            <Laptop className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 rounded-lg overflow-hidden bg-white p-1 hidden sm:flex items-center justify-center border border-slate-200 flex-shrink-0 shadow-sm">
+            <img 
+              src={appLogo || '/logo.png'} 
+              alt="Logo" 
+              className="w-full h-full object-contain aspect-square" 
+              onError={(e) => { (e.target as any).src = '/logo.png'; }} 
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">

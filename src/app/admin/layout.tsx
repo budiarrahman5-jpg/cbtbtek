@@ -18,23 +18,55 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
   const [appName, setAppName] = useState('CBT B-TEK');
+  const [appLogo, setAppLogo] = useState('/logo.png');
+
+  const updateFavicon = (url: string) => {
+    if (typeof document === 'undefined') return;
+    let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = url || '/logo.png';
+  };
 
   useEffect(() => {
-    const cached = localStorage.getItem('cbt_app_name');
-    if (cached) setAppName(cached);
+    const cachedName = localStorage.getItem('cbt_app_name');
+    if (cachedName) setAppName(cachedName);
 
-    const fetchAppName = async () => {
-      const { data } = await supabase.from('pengaturan').select('nilai').eq('kunci', 'nama_aplikasi').maybeSingle();
-      if (data?.nilai) {
-        setAppName(data.nilai);
-        localStorage.setItem('cbt_app_name', data.nilai);
+    const cachedLogo = localStorage.getItem('cbt_app_logo');
+    if (cachedLogo) {
+      setAppLogo(cachedLogo);
+      updateFavicon(cachedLogo);
+    }
+
+    const fetchConfig = async () => {
+      const { data } = await supabase.from('pengaturan').select('*');
+      if (data) {
+        const nameItem = data.find((d: any) => d.kunci === 'nama_aplikasi');
+        if (nameItem?.nilai) {
+          setAppName(nameItem.nilai);
+          localStorage.setItem('cbt_app_name', nameItem.nilai);
+        }
+        const logoItem = data.find((d: any) => d.kunci === 'logo_aplikasi');
+        if (logoItem?.nilai) {
+          setAppLogo(logoItem.nilai);
+          localStorage.setItem('cbt_app_logo', logoItem.nilai);
+          updateFavicon(logoItem.nilai);
+        }
       }
     };
-    fetchAppName();
+    fetchConfig();
 
     const handleUpdate = () => {
-      const updated = localStorage.getItem('cbt_app_name');
-      if (updated) setAppName(updated);
+      const updatedName = localStorage.getItem('cbt_app_name');
+      if (updatedName) setAppName(updatedName);
+      const updatedLogo = localStorage.getItem('cbt_app_logo');
+      if (updatedLogo) {
+        setAppLogo(updatedLogo);
+        updateFavicon(updatedLogo);
+      }
     };
     window.addEventListener('cbt_settings_updated', handleUpdate);
     return () => window.removeEventListener('cbt_settings_updated', handleUpdate);
@@ -180,8 +212,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
 
         <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-gradient-to-br from-indigo-500 to-teal-400 p-2 rounded-xl shadow-lg shadow-indigo-500/20 flex-shrink-0">
-            <Server size={28} className="text-white" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/10 p-1 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0 border border-white/10">
+            <img 
+              src={appLogo} 
+              alt="Logo" 
+              className="w-full h-full object-contain aspect-square" 
+              onError={(e) => { (e.target as any).src = '/logo.png'; }} 
+            />
           </div>
           <div className="min-w-0">
             <h1 className="text-base lg:text-lg font-bold text-white tracking-wide truncate" title={appName}>{appName}</h1>
