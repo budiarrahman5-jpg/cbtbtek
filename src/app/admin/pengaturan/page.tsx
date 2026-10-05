@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Settings, Save, ShieldAlert, ShieldCheck, Smartphone, Users, Info, Search } from 'lucide-react';
+import { Settings, Save, ShieldAlert, ShieldCheck, Smartphone, Users, Info, Search, X } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function PengaturanPage() {
@@ -26,6 +26,7 @@ export default function PengaturanPage() {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isDemo, setIsDemo] = useState(false);
+  const [showPanduanModal, setShowPanduanModal] = useState(false);
 
   // Data Siswa & Kelas untuk Proteksi Layar Khusus
   const [siswaList, setSiswaList] = useState<any[]>([]);
@@ -294,7 +295,17 @@ export default function PengaturanPage() {
         <div className="pt-4 border-t border-gray-200 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-sm mb-1 text-gray-700">Proteksi Layar / Fullscreen</label>
+              <div className="flex items-center gap-1.5 mb-1">
+                <label className="block font-bold text-sm text-gray-700">Proteksi Layar / Fullscreen</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPanduanModal(true)}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-colors border border-indigo-200 text-xs font-bold shadow-sm cursor-pointer"
+                  title="Klik untuk melihat Panduan & Penjelasan Mode Proteksi"
+                >
+                  <Info size={13} />
+                </button>
+              </div>
               <select 
                 value={settings.proteksi_layar || 'ON'} 
                 onChange={e => handleChange('proteksi_layar', e.target.value)}
@@ -316,52 +327,6 @@ export default function PengaturanPage() {
                 className="w-full border-2 p-3 rounded-md focus:ring-red-500 focus:border-red-500 outline-none font-bold text-red-800 bg-red-50" 
               />
               <p className="text-[11px] text-gray-500 mt-1">Kode rahasia pengawas untuk membuka layar siswa yang terkunci karena melanggar aturan.</p>
-            </div>
-          </div>
-
-          {/* Panel Panduan & Penjelasan Mode Proteksi */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-              <Info size={18} className="text-indigo-600" />
-              <span>Panduan & Penjelasan Pilihan Mode Proteksi Layar</span>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-2.5 text-xs text-slate-600">
-              <div className={clsx("p-3 rounded-lg border transition-all", (settings.proteksi_layar === 'ON' || !settings.proteksi_layar) ? "bg-red-50 border-red-300 text-red-950 font-medium ring-1 ring-red-400" : "bg-white border-slate-200")}>
-                <div className="flex items-center gap-1.5 font-bold mb-1 text-slate-800">
-                  <ShieldAlert size={14} className="text-red-600" />
-                  <span className="text-red-700">1. Mode ON (Semua Siswa):</span>
-                </div>
-                <p>Wajib untuk <strong>seluruh peserta</strong> tanpa kecuali. Semua peserta wajib mode fullscreen. Jika peserta meminimalkan browser, berpindah aplikasi, membuka tab lain, atau keluar fullscreen, layar ujian <strong>langsung terkunci otomatis</strong> dan wajib dibuka oleh pengawas menggunakan Kode Buka Blokir.</p>
-              </div>
-
-              <div className={clsx("p-3 rounded-lg border transition-all", settings.proteksi_layar === 'NON_EXAMBRO' ? "bg-amber-50 border-amber-300 text-amber-950 font-medium ring-1 ring-amber-400" : "bg-white border-slate-200")}>
-                <div className="flex items-center gap-1.5 font-bold mb-1 text-slate-800">
-                  <Smartphone size={14} className="text-amber-600" />
-                  <span className="text-amber-800">2. Mode ON Khusus Non-Exambro (Deteksi Otomatis) ⭐ Sangat Disarankan:</span>
-                </div>
-                <p>Solusi terbaik jika sebagian siswa memiliki kendala gawai (tidak bisa instal Exambro karena HP iPhone/iOS, Android lama, atau laptop tertentu). Sistem membaca identitas peramban (User-Agent):</p>
-                <ul className="list-disc ml-5 mt-1 space-y-1">
-                  <li><strong>Siswa yang menggunakan Exambro resmi:</strong> Ujian berjalan normal tanpa blokir web ganda karena aplikasi Exambro sudah mengunci HP secara fisik.</li>
-                  <li><strong>Siswa yang menggunakan Browser Biasa (Chrome, Safari, Edge, dll.):</strong> Sistem CBT web <strong>secara otomatis mengaktifkan Fullscreen paksa & Blokir Layar</strong> jika keluar aplikasi, sehingga mereka tetap terproteksi penuh dari membuka contekan/Google.</li>
-                </ul>
-              </div>
-
-              <div className={clsx("p-3 rounded-lg border transition-all", settings.proteksi_layar === 'KHUSUS' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-medium ring-1 ring-indigo-400" : "bg-white border-slate-200")}>
-                <div className="flex items-center gap-1.5 font-bold mb-1 text-slate-800">
-                  <Users size={14} className="text-indigo-600" />
-                  <span className="text-indigo-700">3. Mode ON Khusus Siswa Tertentu (Pilih Siswa Manual):</span>
-                </div>
-                <p>Proteksi Fullscreen & Blokir Layar hanya diberlakukan untuk <strong>daftar siswa yang Anda centang</strong> di panel pemilih di bawah ini. Siswa yang tidak dicentang tidak akan terkunci layarnya saat ujian.</p>
-              </div>
-
-              <div className={clsx("p-3 rounded-lg border transition-all", settings.proteksi_layar === 'OFF' ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-medium ring-1 ring-emerald-400" : "bg-white border-slate-200")}>
-                <div className="flex items-center gap-1.5 font-bold mb-1 text-slate-800">
-                  <ShieldCheck size={14} className="text-emerald-600" />
-                  <span className="text-emerald-700">4. Mode OFF (Tidak Aktif / Bebas):</span>
-                </div>
-                <p>Fitur Fullscreen paksa dan Blokir Layar dinonaktifkan sepenuhnya untuk semua peserta. Siswa bebas keluar-masuk layar tanpa terkunci.</p>
-              </div>
             </div>
           </div>
 
@@ -578,6 +543,83 @@ export default function PengaturanPage() {
           <Save size={24} /> SIMPAN PENGATURAN
         </button>
       </div>
+
+      {/* Pop-up Modal Panduan & Penjelasan Mode Proteksi Layar */}
+      {showPanduanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 md:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <Info size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-800">Panduan Mode Proteksi Layar</h3>
+                  <p className="text-xs text-slate-500">Penjelasan lengkap dan rekomendasi penggunaan setiap mode</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowPanduanModal(false)}
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 p-1.5 rounded-lg transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 md:p-6 overflow-y-auto space-y-3 custom-scrollbar text-xs">
+              <div className={clsx("p-3.5 rounded-xl border transition-all", (settings.proteksi_layar === 'ON' || !settings.proteksi_layar) ? "bg-red-50 border-red-300 text-red-950 font-medium ring-2 ring-red-400/40" : "bg-slate-50 border-slate-200 text-slate-700")}>
+                <div className="flex items-center gap-2 font-bold mb-1.5 text-slate-800">
+                  <ShieldAlert size={16} className="text-red-600" />
+                  <span className="text-red-700 text-sm">1. Mode ON (Semua Siswa)</span>
+                </div>
+                <p className="leading-relaxed">Wajib untuk <strong>seluruh peserta</strong> tanpa kecuali. Semua gawai peserta dipaksa masuk mode fullscreen. Jika peserta meminimalkan browser, berpindah aplikasi, membuka tab lain, atau keluar fullscreen, layar ujian <strong>langsung terkunci otomatis</strong> dan wajib dibuka oleh pengawas menggunakan Kode Buka Blokir.</p>
+              </div>
+
+              <div className={clsx("p-3.5 rounded-xl border transition-all", settings.proteksi_layar === 'NON_EXAMBRO' ? "bg-amber-50 border-amber-300 text-amber-950 font-medium ring-2 ring-amber-400/40" : "bg-slate-50 border-slate-200 text-slate-700")}>
+                <div className="flex items-center gap-2 font-bold mb-1.5 text-slate-800">
+                  <Smartphone size={16} className="text-amber-600" />
+                  <span className="text-amber-800 text-sm">2. Mode ON Khusus Non-Exambro (Deteksi Otomatis) ⭐ Sangat Disarankan</span>
+                </div>
+                <p className="leading-relaxed">Solusi terbaik jika sebagian siswa memiliki kendala gawai (tidak bisa instal Exambro karena HP iPhone/iOS, Android versi lama, atau laptop/Chromebook tertentu). Sistem membaca identitas peramban (User-Agent):</p>
+                <ul className="list-disc ml-5 mt-2 space-y-1">
+                  <li><strong>Siswa yang menggunakan Exambro resmi:</strong> Ujian berjalan normal tanpa blokir web ganda karena aplikasi Exambro sudah mengunci HP secara fisik.</li>
+                  <li><strong>Siswa yang menggunakan Browser Biasa (Chrome, Safari, Edge, dll.):</strong> Sistem CBT web <strong>secara otomatis mengaktifkan Fullscreen paksa & Blokir Layar</strong> jika keluar aplikasi, sehingga mereka tetap terproteksi penuh dari membuka contekan/Google.</li>
+                </ul>
+              </div>
+
+              <div className={clsx("p-3.5 rounded-xl border transition-all", settings.proteksi_layar === 'KHUSUS' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-medium ring-2 ring-indigo-400/40" : "bg-slate-50 border-slate-200 text-slate-700")}>
+                <div className="flex items-center gap-2 font-bold mb-1.5 text-slate-800">
+                  <Users size={16} className="text-indigo-600" />
+                  <span className="text-indigo-700 text-sm">3. Mode ON Khusus Siswa Tertentu (Pilih Siswa Manual)</span>
+                </div>
+                <p className="leading-relaxed">Proteksi Fullscreen & Blokir Layar hanya diberlakukan untuk <strong>daftar siswa yang Anda centang</strong> di panel pemilih di halaman pengaturan. Siswa yang tidak dicentang tidak akan terkunci layarnya saat ujian.</p>
+              </div>
+
+              <div className={clsx("p-3.5 rounded-xl border transition-all", settings.proteksi_layar === 'OFF' ? "bg-emerald-50 border-emerald-300 text-emerald-950 font-medium ring-2 ring-emerald-400/40" : "bg-slate-50 border-slate-200 text-slate-700")}>
+                <div className="flex items-center gap-2 font-bold mb-1.5 text-slate-800">
+                  <ShieldCheck size={16} className="text-emerald-600" />
+                  <span className="text-emerald-700 text-sm">4. Mode OFF (Tidak Aktif / Bebas)</span>
+                </div>
+                <p className="leading-relaxed">Fitur Fullscreen paksa dan Blokir Layar dinonaktifkan sepenuhnya untuk semua peserta. Siswa bebas keluar-masuk layar tanpa terkunci.</p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button 
+                type="button" 
+                onClick={() => setShowPanduanModal(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-5 py-2 rounded-lg transition"
+              >
+                Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

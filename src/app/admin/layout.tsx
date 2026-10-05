@@ -237,14 +237,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Menu size={24} />
             </button>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md hidden sm:inline-block">
-                  {appName}
-                </span>
-                <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-                  {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
-                </h2>
-              </div>
+              <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+                {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
+              </h2>
             </div>
           </div>
           
