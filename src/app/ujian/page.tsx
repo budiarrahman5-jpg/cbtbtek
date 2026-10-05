@@ -273,6 +273,7 @@ export default function UjianPage() {
     isOpen: boolean;
     skorAkhir: number;
     waktuPakai: string;
+    pesanKhusus?: string;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -483,7 +484,14 @@ export default function UjianPage() {
     
     const jwbKey = `cbt_jawaban_${u.id}_${p.id}`;
     const savedJwb = localStorage.getItem(jwbKey);
-    if (savedJwb) setJawaban(JSON.parse(savedJwb));
+    if (savedJwb) {
+      setJawaban(JSON.parse(savedJwb));
+    } else if (u.jawaban_sementara && Object.keys(u.jawaban_sementara).length > 0) {
+      setJawaban(u.jawaban_sementara);
+      try {
+        localStorage.setItem(jwbKey, JSON.stringify(u.jawaban_sementara));
+      } catch (e) {}
+    }
     
     const rguKey = `cbt_ragu_${u.id}_${p.id}`;
     const savedRgu = localStorage.getItem(rguKey);
@@ -551,6 +559,43 @@ export default function UjianPage() {
 
     const checkProctorMessages = async () => {
       try {
+        // 0. Cek apakah ujian dihentikan paksa oleh pengawas
+        const { data: uStatus } = await supabase
+          .from('users')
+          .select('status_ujian')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (uStatus?.status_ujian === 'Selesai' && !isReviewOpen) {
+          localStorage.removeItem('cbt_paket');
+          localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
+          localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
+          localStorage.removeItem(`cbt_jawaban_${user.id}_${paket.id}`);
+          localStorage.removeItem(`cbt_ragu_${user.id}_${paket.id}`);
+
+          const { data: hasilRow } = await supabase
+            .from('hasil')
+            .select('skor_akhir')
+            .eq('user_id', user.id)
+            .eq('paket_id', paket.id)
+            .maybeSingle();
+
+          try {
+            if (document.fullscreenElement && document.exitFullscreen) {
+              await document.exitFullscreen();
+            }
+          } catch (e) {}
+
+          playAlertSound();
+          setHasilSelesai({
+            isOpen: true,
+            skorAkhir: hasilRow?.skor_akhir ?? 0,
+            waktuPakai: 'Dihentikan oleh Pengawas',
+            pesanKhusus: 'Ujian Anda telah dihentikan paksa oleh Proktor/Pengawas. Seluruh jawaban Anda telah disimpan ke Hasil Ujian.'
+          });
+          return;
+        }
+
         // 1. Cek pesan individual dari tabel log
         const { data: logs } = await supabase
           .from('log')
@@ -605,9 +650,49 @@ export default function UjianPage() {
       } catch (err) {}
     };
 
-    const interval = setInterval(checkProctorMessages, 6000);
+    const interval = setInterval(checkProctorMessages, 5000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, paket, isReviewOpen]);
+
+  // Sinkronisasi otomatis jawaban sementara & sisa waktu ke Supabase (Debounced 1.5 detik)
+  useEffect(() => {
+    if (!user || !paket || Object.keys(jawaban).length === 0) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await supabase
+          .from('users')
+          .update({
+            jawaban_sementara: jawaban,
+            sisa_waktu: sisaWaktu,
+            paket_aktif_id: paket.id
+          })
+          .eq('id', user.id);
+      } catch (err) {
+        console.error('Gagal sinkron jawaban sementara:', err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [jawaban, user, paket, sisaWaktu]);
+
+  // Sinkronisasi berkala sisa waktu & jawaban setiap 20 detik
+  useEffect(() => {
+    if (!user || !paket) return;
+    const interval = setInterval(async () => {
+      try {
+        await supabase
+          .from('users')
+          .update({
+            jawaban_sementara: jawaban,
+            sisa_waktu: sisaWaktu,
+            paket_aktif_id: paket.id
+          })
+          .eq('id', user.id);
+      } catch (e) {}
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [user, paket, jawaban, sisaWaktu]);
 
   const handleChangeFontSize = (size: 'sm' | 'base' | 'lg') => {
     setFontSize(size);
@@ -1434,6 +1519,18 @@ export default function UjianPage() {
 
           <div className="relative bg-white/95 backdrop-blur-md rounded-3xl p-6 md:p-10 max-w-xl w-full text-center shadow-2xl border border-slate-100 my-8">
             
+            {hasilSelesai.pesanKhusus && (
+              <div className="bg-amber-50 border-2 border-amber-300 text-amber-900 rounded-2xl p-4 mb-6 text-xs md:text-sm font-bold flex items-center gap-3 text-left shadow-sm">
+                <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <div className="font-black text-amber-950 uppercase text-[11px] tracking-wider mb-0.5">Pemberitahuan Pengawas:</div>
+                  <div className="font-semibold text-amber-900 leading-snug">{hasilSelesai.pesanKhusus}</div>
+                </div>
+              </div>
+            )}
+
             {tampilNilai === 'ON' ? (
               <>
                 {/* Tampilan Dengan Nilai (ON) */}
