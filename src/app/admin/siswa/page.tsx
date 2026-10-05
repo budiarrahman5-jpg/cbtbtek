@@ -46,6 +46,55 @@ export default function KelolaSiswaPage() {
 
   const [isDemo, setIsDemo] = useState(false);
 
+  // State Foto Siswa (Opsional)
+  const [fotoSiswaMap, setFotoSiswaMap] = useState<Record<string, string>>({});
+  const [sFotoBase64, setSFotoBase64] = useState<string>('');
+  const [modalFotoSiswa, setModalFotoSiswa] = useState<{ isOpen: boolean; siswa: any | null; tempFoto: string }>({
+    isOpen: false,
+    siswa: null,
+    tempFoto: ''
+  });
+  const [isSavingFoto, setIsSavingFoto] = useState(false);
+
+  // Helper Kompresi Foto Siswa (Pas Foto 2x3 Ringan & Tajam)
+  const compressImage = (file: File, maxWidth = 240, maxHeight = 320): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new (window as any).Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   // State Cetak Kartu Peserta Ujian (Format 8 Kartu per A4)
   const [modalKartu, setModalKartu] = useState(false);
   const [appLogo, setAppLogo] = useState('/logo.png');
@@ -72,6 +121,14 @@ export default function KelolaSiswaPage() {
     if (savedUser) {
       const user = JSON.parse(savedUser);
       setIsDemo(user?.username?.startsWith('demo_admin_'));
+    }
+
+    // Muat cache foto siswa
+    try {
+      const cachedFoto = localStorage.getItem('cbt_foto_siswa_map');
+      if (cachedFoto) setFotoSiswaMap(JSON.parse(cachedFoto));
+    } catch (e) {
+      console.error(e);
     }
 
     // Muat preferensi kartu peserta jika ada
@@ -103,13 +160,18 @@ export default function KelolaSiswaPage() {
     dataSiswa = filterDemoData(dataSiswa, 'siswa');
     if (dataSiswa) setSiswa(dataSiswa);
 
-    // Fetch Pengaturan Logo & Nama Sekolah
+    // Fetch Pengaturan Logo, Nama Sekolah, dan Foto Siswa
     try {
       const { data: dataSetting } = await supabase.from('pengaturan').select('*');
       if (dataSetting) {
         const settingObj: Record<string, string> = {};
+        const fotoMap: Record<string, string> = {};
         dataSetting.forEach(item => {
           settingObj[item.kunci] = item.nilai;
+          if (item.kunci?.startsWith('foto_siswa_')) {
+            const studentId = item.kunci.replace('foto_siswa_', '');
+            fotoMap[studentId] = item.nilai;
+          }
         });
         if (settingObj.logo_aplikasi) setAppLogo(settingObj.logo_aplikasi);
         if (settingObj.nama_aplikasi) {
@@ -119,9 +181,11 @@ export default function KelolaSiswaPage() {
             namaSekolah: prev.namaSekolah === 'SMK / SMA / SMP CBT B-TEK' ? settingObj.nama_aplikasi : prev.namaSekolah
           }));
         }
+        setFotoSiswaMap(fotoMap);
+        localStorage.setItem('cbt_foto_siswa_map', JSON.stringify(fotoMap));
       }
     } catch (e) {
-      console.error('Gagal mengambil logo/nama aplikasi:', e);
+      console.error('Gagal mengambil pengaturan/foto siswa:', e);
     }
       
     setIsLoading(false);
@@ -156,20 +220,66 @@ export default function KelolaSiswaPage() {
       return;
     }
 
-    const { error } = await supabase.from('users').insert({
+    const { data: newSiswa, error } = await supabase.from('users').insert({
       username: sUsername,
       password: sPassword,
       nama: sNama,
       kelas_id: sKelasId,
       role: 'siswa'
-    });
+    }).select().single();
 
     if (error) {
       alert('Gagal menyimpan siswa. Pastikan username belum dipakai.');
     } else {
+      // Simpan foto siswa jika ada yang diupload
+      if (sFotoBase64 && newSiswa?.id) {
+        await supabase.from('pengaturan').upsert({
+          kunci: `foto_siswa_${newSiswa.id}`,
+          nilai: sFotoBase64
+        });
+        setFotoSiswaMap(prev => {
+          const next = { ...prev, [newSiswa.id]: sFotoBase64 };
+          localStorage.setItem('cbt_foto_siswa_map', JSON.stringify(next));
+          return next;
+        });
+      }
       alert('Siswa berhasil ditambahkan!');
-      setSUsername(''); setSPassword(''); setSNama(''); setSKelasId('');
+      setSUsername(''); setSPassword(''); setSNama(''); setSKelasId(''); setSFotoBase64('');
       fetchData();
+    }
+  };
+
+  const handleSaveFotoModal = async () => {
+    if (!modalFotoSiswa.siswa) return;
+    setIsSavingFoto(true);
+    const sId = modalFotoSiswa.siswa.id;
+    try {
+      if (modalFotoSiswa.tempFoto) {
+        await supabase.from('pengaturan').upsert({
+          kunci: `foto_siswa_${sId}`,
+          nilai: modalFotoSiswa.tempFoto
+        });
+        setFotoSiswaMap(prev => {
+          const next = { ...prev, [sId]: modalFotoSiswa.tempFoto };
+          localStorage.setItem('cbt_foto_siswa_map', JSON.stringify(next));
+          return next;
+        });
+        alert('Foto siswa berhasil disimpan!');
+      } else {
+        await supabase.from('pengaturan').delete().eq('kunci', `foto_siswa_${sId}`);
+        setFotoSiswaMap(prev => {
+          const next = { ...prev };
+          delete next[sId];
+          localStorage.setItem('cbt_foto_siswa_map', JSON.stringify(next));
+          return next;
+        });
+        alert('Foto siswa berhasil dihapus.');
+      }
+      setModalFotoSiswa({ isOpen: false, siswa: null, tempFoto: '' });
+    } catch (e: any) {
+      alert(e.message || 'Gagal menyimpan foto siswa.');
+    } finally {
+      setIsSavingFoto(false);
     }
   };
 
@@ -548,6 +658,64 @@ export default function KelolaSiswaPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Upload Foto Siswa (Opsional) */}
+              <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+                <div className="w-16 h-20 border border-slate-300 rounded-lg overflow-hidden bg-white flex items-center justify-center flex-shrink-0 shadow-sm relative group">
+                  {sFotoBase64 ? (
+                    <img src={sFotoBase64} alt="Preview Foto" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-300 p-1 text-center">
+                      <Camera size={18} className="mb-0.5" />
+                      <span className="text-[8px] font-bold">2x3</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 text-center sm:text-left min-w-0">
+                  <div className="flex items-center gap-2 justify-center sm:justify-start">
+                    <span className="text-xs font-bold text-slate-700">Foto Pas Siswa 2x3</span>
+                    <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-semibold">Opsional</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Format JPG/PNG. Otomatis dikompresi & tampil pada Kartu Peserta Ujian.
+                  </p>
+                  
+                  <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
+                    <label className="cursor-pointer bg-white border border-slate-300 hover:border-indigo-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 transition-all shadow-sm active:scale-95 inline-flex items-center gap-1.5">
+                      <Upload size={13} />
+                      <span>{sFotoBase64 ? 'Ganti Foto' : 'Pilih Foto'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const b64 = await compressImage(file);
+                              setSFotoBase64(b64);
+                            } catch (err) {
+                              alert('Gagal memproses gambar foto.');
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {sFotoBase64 && (
+                      <button
+                        type="button"
+                        onClick={() => setSFotoBase64('')}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <button onClick={simpanSiswaSingle} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all active:scale-[0.98] uppercase tracking-wider mt-2">
                 Simpan Data Siswa
               </button>
@@ -960,7 +1128,8 @@ export default function KelolaSiswaPage() {
           <table className="w-full text-left border-collapse text-sm whitespace-nowrap">
             <thead className="bg-white text-slate-500 sticky top-0 z-10 shadow-sm uppercase text-xs tracking-wider font-bold">
               <tr>
-                <th className="p-4 border-b border-slate-100 w-16 text-center">No</th>
+                <th className="p-4 border-b border-slate-100 w-14 text-center">No</th>
+                <th className="p-4 border-b border-slate-100 w-16 text-center">Foto</th>
                 <th className="p-4 border-b border-slate-100">Username</th>
                 <th className="p-4 border-b border-slate-100">Password</th>
                 <th className="p-4 border-b border-slate-100">Nama Lengkap</th>
@@ -971,13 +1140,37 @@ export default function KelolaSiswaPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="p-12 text-center text-indigo-500 font-bold animate-pulse">Memuat direktori siswa...</td></tr>
+                <tr><td colSpan={8} className="p-12 text-center text-indigo-500 font-bold animate-pulse">Memuat direktori siswa...</td></tr>
               ) : filteredSiswa.length === 0 ? (
-                <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-medium">Tidak ada data siswa ditemukan.</td></tr>
+                <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-medium">Tidak ada data siswa ditemukan.</td></tr>
               ) : (
                 filteredSiswa.map((s, idx) => (
                   <tr key={s.id} className="hover:bg-indigo-50/40 transition-colors border-b border-slate-50 last:border-0 group">
                     <td className="p-4 text-center font-bold text-slate-400">{idx + 1}</td>
+                    
+                    {/* Kolom Foto Siswa */}
+                    <td className="p-3 text-center">
+                      {fotoSiswaMap[s.id] ? (
+                        <div 
+                          onClick={() => setModalFotoSiswa({ isOpen: true, siswa: s, tempFoto: fotoSiswaMap[s.id] })}
+                          className="w-8 h-10 rounded border border-slate-200 overflow-hidden shadow-sm mx-auto cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all group/f"
+                          title="Klik untuk ganti atau hapus foto"
+                        >
+                          <img src={fotoSiswaMap[s.id]} alt="Foto" className="w-full h-full object-cover group-hover/f:scale-105 transition-transform" />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setModalFotoSiswa({ isOpen: true, siswa: s, tempFoto: '' })}
+                          className="w-8 h-10 rounded border border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 flex flex-col items-center justify-center text-[7px] font-bold transition-all mx-auto"
+                          title="Upload Foto Siswa"
+                        >
+                          <Camera size={13} className="mb-0.5" />
+                          <span>+Foto</span>
+                        </button>
+                      )}
+                    </td>
+
                     <td className="p-4 font-bold text-slate-700">{s.username}</td>
                     <td className="p-4 font-mono text-xs font-semibold text-slate-400 bg-slate-50 rounded px-2 m-2 inline-block border border-slate-100">{s.password}</td>
                     <td className="p-4 font-black text-slate-800">{s.nama}</td>
@@ -1023,21 +1216,115 @@ export default function KelolaSiswaPage() {
       </div>
 
       {/* ========================================================================= */}
+      {/* MODAL KELOLA FOTO SISWA */}
+      {/* ========================================================================= */}
+      {modalFotoSiswa.isOpen && modalFotoSiswa.siswa && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 no-print animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden p-6 text-center">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                <Camera size={16} className="text-indigo-600" />
+                <span>Foto Siswa (Pas Foto 2x3)</span>
+              </h4>
+              <button
+                onClick={() => setModalFotoSiswa({ isOpen: false, siswa: null, tempFoto: '' })}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mb-3 text-left bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+              <div className="font-black text-slate-800 text-sm truncate">{modalFotoSiswa.siswa.nama}</div>
+              <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                No. Peserta: <strong className="font-mono text-indigo-700">{modalFotoSiswa.siswa.username}</strong> • Kelas: {modalFotoSiswa.siswa.kelas?.nama_kelas || '-'}
+              </div>
+            </div>
+
+            <div className="my-4 flex justify-center">
+              <div className="w-24 h-32 border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-white flex items-center justify-center shadow-inner relative">
+                {modalFotoSiswa.tempFoto ? (
+                  <img src={modalFotoSiswa.tempFoto} alt="Pas Foto Siswa" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-300 p-2">
+                    <Camera size={24} className="mb-1 text-slate-300" />
+                    <span className="text-[9px] font-bold">FOTO 2x3</span>
+                    <span className="text-[8px] text-slate-400 mt-0.5">Belum ada</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-4 rounded-xl text-xs cursor-pointer transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95">
+                <Upload size={14} />
+                <span>{modalFotoSiswa.tempFoto ? 'Ganti Foto Lain' : 'Unggah Foto Baru'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      try {
+                        const b64 = await compressImage(file);
+                        setModalFotoSiswa(prev => ({ ...prev, tempFoto: b64 }));
+                      } catch (err) {
+                        alert('Gagal memproses gambar foto.');
+                      }
+                    }
+                  }}
+                />
+              </label>
+
+              {modalFotoSiswa.tempFoto && (
+                <button
+                  type="button"
+                  onClick={() => setModalFotoSiswa(prev => ({ ...prev, tempFoto: '' }))}
+                  className="text-xs text-red-500 hover:text-red-700 font-bold py-1 transition-colors block mx-auto"
+                >
+                  Hapus Foto Ini
+                </button>
+              )}
+
+              <div className="flex gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalFotoSiswa({ isOpen: false, siswa: null, tempFoto: '' })}
+                  className="flex-1 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingFoto}
+                  onClick={handleSaveFotoModal}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white py-2.5 text-xs font-bold rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  {isSavingFoto ? 'Menyimpan...' : 'Simpan Foto'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL CETAK KARTU PESERTA UJIAN (FORMAT 8 KARTU PER LEMBAR A4) */}
       {/* ========================================================================= */}
       {modalKartu && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-start items-center overflow-y-auto p-2 sm:p-4 md:p-6 no-print">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col my-auto max-h-[96vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-start items-center overflow-y-auto p-2 sm:p-4 md:p-6 print-modal-container">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col my-auto max-h-[96vh] print-modal-box">
             
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0">
+            <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0 no-print">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-indigo-600 rounded-xl shadow-md">
                   <CreditCard className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base sm:text-lg">Cetak Kartu Peserta Ujian</h3>
-                  <p className="text-xs text-slate-300 font-medium">Format 8 Kartu per Lembar A4 (2 Kolom x 4 Baris) • Hemat Kertas & Siap Gunting</p>
+                  <p className="text-xs text-slate-300 font-medium">Format 8 Kartu per Lembar A4 (2 Kolom x 4 Baris) • Tampilan Cetak 100% Sesuai Preview</p>
                 </div>
               </div>
 
@@ -1066,7 +1353,7 @@ export default function KelolaSiswaPage() {
 
             {/* Panel Pengaturan Kop & Kartu (Expandable) */}
             {showConfigKartu && (
-              <div className="bg-slate-50 border-b border-slate-200 p-4 sm:p-5 text-xs space-y-4 flex-shrink-0 animate-in fade-in duration-200">
+              <div className="bg-slate-50 border-b border-slate-200 p-4 sm:p-5 text-xs space-y-4 flex-shrink-0 animate-in fade-in duration-200 no-print">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Nama Instansi / Sekolah</label>
@@ -1215,7 +1502,7 @@ export default function KelolaSiswaPage() {
             )}
 
             {/* Filter & Toolbar Modal */}
-            <div className="p-4 bg-white border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0">
+            <div className="p-4 bg-white border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0 no-print">
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-500">Filter Kelas:</span>
@@ -1286,8 +1573,8 @@ export default function KelolaSiswaPage() {
               </div>
             </div>
 
-            {/* Area Pratinjau Lembar A4 di Layar */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 custom-scrollbar flex flex-col items-center gap-6">
+            {/* Area Pratinjau & Cetak Lembar A4 Tunggal (Preview == Cetak 100%) */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/60 custom-scrollbar flex flex-col items-center gap-6 print-preview-scroll">
               {(() => {
                 const targetSiswa = siswa.filter(s => {
                   const matchKls = filterKelasKartu === 'ALL' || s.kelas_id === filterKelasKartu;
@@ -1299,7 +1586,7 @@ export default function KelolaSiswaPage() {
 
                 if (targetSiswa.length === 0) {
                   return (
-                    <div className="bg-white p-12 rounded-2xl shadow text-center max-w-md my-auto">
+                    <div className="bg-white p-12 rounded-2xl shadow text-center max-w-md my-auto no-print">
                       <CreditCard className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                       <h4 className="font-extrabold text-slate-700 text-base">Tidak Ada Siswa Terpilih</h4>
                       <p className="text-xs text-slate-400 mt-1">Silakan sesuaikan filter kelas atau kata kunci pencarian di atas.</p>
@@ -1307,7 +1594,7 @@ export default function KelolaSiswaPage() {
                   );
                 }
 
-                // Chunking 8 kartu per halaman
+                // Chunking tepat 8 kartu per halaman A4
                 const pages: any[][] = [];
                 for (let i = 0; i < targetSiswa.length; i += 8) {
                   pages.push(targetSiswa.slice(i, i + 8));
@@ -1316,30 +1603,24 @@ export default function KelolaSiswaPage() {
                 const effectiveLogo = kartuConfig.customLogoUrl || appLogo || '/logo.png';
 
                 return pages.map((pageSiswa, pageIdx) => (
-                  <div key={pageIdx} className="w-full flex flex-col items-center">
-                    <div className="text-[11px] font-bold text-slate-500 mb-2 self-start max-w-[210mm] w-full px-1 flex justify-between">
+                  <div key={pageIdx} className="w-full flex flex-col items-center page-wrapper-print">
+                    <div className="text-[11px] font-bold text-slate-500 mb-2 self-start max-w-[210mm] w-full px-1 flex justify-between no-print">
                       <span>📄 Halaman {pageIdx + 1} dari {pages.length}</span>
                       <span>{pageSiswa.length} Kartu</span>
                     </div>
 
-                    {/* Simulasi Lembar A4 */}
-                    <div 
-                      className="bg-white shadow-2xl border border-slate-300 rounded-sm p-4 w-full max-w-[210mm] min-h-[297mm] grid grid-cols-1 sm:grid-cols-2 gap-3"
-                      style={{
-                        boxSizing: 'border-box'
-                      }}
-                    >
+                    {/* Lembar A4 (Digunakan untuk Preview dan Dicetak Langsung) */}
+                    <div className="a4-sheet-card">
                       {pageSiswa.map((s) => (
                         <div 
                           key={s.id} 
-                          className="border border-dashed border-slate-400 rounded-lg p-2.5 flex flex-col justify-between bg-white relative text-slate-800"
-                          style={{ minHeight: '66mm' }}
+                          className="card-unit"
                         >
                           {/* Kop Kartu */}
                           <div>
-                            <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-1.5 mb-2">
+                            <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-1 mb-1.5">
                               {/* Logo Persegi aspect-square */}
-                              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-slate-50 rounded border border-slate-200 overflow-hidden">
+                              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-white rounded border border-slate-200 overflow-hidden p-0.5">
                                 <img
                                   src={effectiveLogo}
                                   alt="Logo"
@@ -1347,7 +1628,7 @@ export default function KelolaSiswaPage() {
                                   onError={(e) => { (e.target as any).src = '/logo.png'; }}
                                 />
                               </div>
-                              <div className="flex-1 min-w-0 text-center pr-1">
+                              <div className="flex-1 min-w-0 text-center pr-0.5">
                                 <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-900 truncate leading-tight">
                                   {kartuConfig.namaSekolah}
                                 </h4>
@@ -1361,22 +1642,32 @@ export default function KelolaSiswaPage() {
                             </div>
 
                             {/* Badan Data Siswa */}
-                            <div className="flex gap-2.5 items-start mt-1">
-                              {/* Kotak Pas Foto Persegi Panjang 2x3 */}
-                              <div className="w-12 h-16 flex-shrink-0 border border-slate-300 rounded bg-slate-50 flex flex-col items-center justify-center text-[7px] font-bold text-slate-400 p-1 text-center shadow-inner">
-                                <ImageIcon size={14} className="mb-0.5 text-slate-300" />
-                                <span>FOTO</span>
-                                <span>2x3</span>
+                            <div className="flex gap-2 items-start mt-0.5">
+                              {/* Kotak Pas Foto 2x3 (Dengan Foto Asli jika Diupload) */}
+                              <div className="w-12 h-16 flex-shrink-0 border border-slate-300 rounded bg-slate-50 flex flex-col items-center justify-center overflow-hidden shadow-inner">
+                                {fotoSiswaMap[s.id] ? (
+                                  <img
+                                    src={fotoSiswaMap[s.id]}
+                                    alt={`Foto ${s.nama}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center text-[7px] font-bold text-slate-400 p-0.5 text-center">
+                                    <ImageIcon size={13} className="mb-0.5 text-slate-300" />
+                                    <span>FOTO</span>
+                                    <span>2x3</span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Tabel Info Siswa */}
-                              <div className="flex-1 min-w-0 text-[8.5px] space-y-0.5">
-                                <div className="flex">
+                              <div className="flex-1 min-w-0 text-[8.5px] space-y-0.5 leading-snug">
+                                <div className="flex items-baseline">
                                   <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Nama</span>
                                   <span className="font-bold text-slate-400 mr-1">:</span>
                                   <span className="font-black text-slate-900 truncate uppercase">{s.nama}</span>
                                 </div>
-                                <div className="flex">
+                                <div className="flex items-baseline">
                                   <span className="w-16 font-semibold text-slate-500 flex-shrink-0">No. Peserta</span>
                                   <span className="font-bold text-slate-400 mr-1">:</span>
                                   <span className="font-mono font-bold text-indigo-800">{s.username}</span>
@@ -1388,12 +1679,12 @@ export default function KelolaSiswaPage() {
                                     {kartuConfig.tampilkanPassword ? s.password : '••••••••'}
                                   </span>
                                 </div>
-                                <div className="flex">
+                                <div className="flex items-baseline">
                                   <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Kelas</span>
                                   <span className="font-bold text-slate-400 mr-1">:</span>
                                   <span className="font-bold text-slate-700 uppercase">{s.kelas?.nama_kelas || '-'}</span>
                                 </div>
-                                <div className="flex">
+                                <div className="flex items-baseline">
                                   <span className="w-16 font-semibold text-slate-500 flex-shrink-0">Ruang/Sesi</span>
                                   <span className="font-bold text-slate-400 mr-1">:</span>
                                   <span className="font-semibold text-slate-600">{kartuConfig.ruangSesi}</span>
@@ -1403,14 +1694,14 @@ export default function KelolaSiswaPage() {
                           </div>
 
                           {/* Footer Kartu & Tanda Tangan */}
-                          <div className="mt-2 pt-1 border-t border-slate-200 flex justify-between items-end text-[7px]">
-                            <div className="text-slate-400 italic max-w-[50%] leading-tight">
+                          <div className="mt-1.5 pt-1 border-t border-slate-200 flex justify-between items-end text-[7px]">
+                            <div className="text-slate-400 italic max-w-[50%] leading-tight text-[6.5px]">
                               {kartuConfig.catatanBawah}
                             </div>
                             <div className="text-right leading-tight">
                               <p className="text-slate-500">{kartuConfig.kotaTanggal}</p>
                               <p className="font-bold text-slate-700">{kartuConfig.namaPenandatangan}</p>
-                              <div className="h-4"></div>
+                              <div className="h-3.5"></div>
                               <p className="font-bold text-slate-800">(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</p>
                             </div>
                           </div>
@@ -1426,285 +1717,134 @@ export default function KelolaSiswaPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* ELEMEN KHUSUS CETAK SAAT WINDOW.PRINT() DIJALANKAN */}
-      {/* ========================================================================= */}
-      <div className="hidden print-cards-container">
-        {(() => {
-          const targetSiswa = siswa.filter(s => {
-            const matchKls = filterKelasKartu === 'ALL' || s.kelas_id === filterKelasKartu;
-            const matchSrch = !searchKartu || 
-              s.nama?.toLowerCase().includes(searchKartu.toLowerCase()) || 
-              s.username?.toLowerCase().includes(searchKartu.toLowerCase());
-            return matchKls && matchSrch;
-          });
-
-          // Bagi tepat 8 siswa per lembar A4
-          const pages: any[][] = [];
-          for (let i = 0; i < targetSiswa.length; i += 8) {
-            pages.push(targetSiswa.slice(i, i + 8));
-          }
-
-          const effectiveLogo = kartuConfig.customLogoUrl || appLogo || '/logo.png';
-
-          return pages.map((pageSiswa, pageIdx) => (
-            <div 
-              key={pageIdx} 
-              className="a4-print-sheet"
-              style={{
-                pageBreakAfter: pageIdx === pages.length - 1 ? 'auto' : 'always',
-                breakAfter: pageIdx === pages.length - 1 ? 'auto' : 'page',
-              }}
-            >
-              {pageSiswa.map((s) => (
-                <div 
-                  key={s.id} 
-                  className="card-item-print"
-                >
-                  {/* Kop Kartu */}
-                  <div>
-                    <div className="card-header-print">
-                      {/* Logo Persegi aspect-square */}
-                      <div className="card-logo-container">
-                        <img
-                          src={effectiveLogo}
-                          alt="Logo"
-                          className="card-logo-img"
-                          onError={(e) => { (e.target as any).src = '/logo.png'; }}
-                        />
-                      </div>
-                      <div className="card-header-text">
-                        <div className="card-title-school">{kartuConfig.namaSekolah}</div>
-                        <div className="card-title-exam">{kartuConfig.judulUjian}</div>
-                        <div className="card-subtitle">{kartuConfig.subJudul}</div>
-                      </div>
-                    </div>
-
-                    {/* Data Siswa */}
-                    <div className="card-body-print">
-                      <div className="card-photo-box">
-                        <span>FOTO</span>
-                        <span>2x3</span>
-                      </div>
-
-                      <div className="card-details-print">
-                        <div className="detail-row">
-                          <span className="detail-label">Nama</span>
-                          <span className="detail-colon">:</span>
-                          <span className="detail-val font-bold uppercase">{s.nama}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">No. Peserta</span>
-                          <span className="detail-colon">:</span>
-                          <span className="detail-val font-mono font-bold text-indigo">{s.username}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Password</span>
-                          <span className="detail-colon">:</span>
-                          <span className="detail-val font-mono">
-                            {kartuConfig.tampilkanPassword ? s.password : '••••••••'}
-                          </span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Kelas</span>
-                          <span className="detail-colon">:</span>
-                          <span className="detail-val uppercase">{s.kelas?.nama_kelas || '-'}</span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Ruang/Sesi</span>
-                          <span className="detail-colon">:</span>
-                          <span className="detail-val">{kartuConfig.ruangSesi}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer Kartu & Tanda Tangan */}
-                  <div className="card-footer-print">
-                    <div className="card-notes">
-                      {kartuConfig.catatanBawah}
-                    </div>
-                    <div className="card-signature">
-                      <div>{kartuConfig.kotaTanggal}</div>
-                      <div className="sig-title">{kartuConfig.namaPenandatangan}</div>
-                      <div className="sig-space"></div>
-                      <div>(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ));
-        })()}
-      </div>
-
-      {/* ========================================================================= */}
-      {/* CSS KHUSUS PRINT A4 DENGAN FORMAT 8 KARTU PER LEMBAR (2 KOLOM X 4 BARIS) */}
+      {/* CSS KHUSUS PRINT A4 (PREVIEW & CETAK IDENTIK 100%) */}
       {/* ========================================================================= */}
       <style dangerouslySetInnerHTML={{__html: `
+        /* Screen Style Lembar A4 */
+        .a4-sheet-card {
+          background: white;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          padding: 16px;
+          width: 100%;
+          max-width: 210mm;
+          min-height: 297mm;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          grid-template-rows: repeat(4, 1fr);
+          gap: 12px;
+          box-sizing: border-box;
+        }
+
+        .card-unit {
+          border: 1px dashed #94a3b8;
+          border-radius: 8px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          background: white;
+          position: relative;
+          color: #1e293b;
+          min-height: 66mm;
+          box-sizing: border-box;
+        }
+
+        @media (max-width: 640px) {
+          .a4-sheet-card {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+          }
+        }
+
+        /* PRINT STYLE PERSIS SESUAI PREVIEW */
         @media print {
           @page {
             size: A4 portrait;
-            margin: 6mm;
+            margin: 0;
           }
           body {
             background: white !important;
             color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           header, aside, nav, .no-print, button, input {
             display: none !important;
           }
-          .print-cards-container {
+          .print-modal-container {
+            position: static !important;
+            inset: auto !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
             display: block !important;
             width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          .print-modal-box {
+            box-shadow: none !important;
+            border: none !important;
+            width: 100% !important;
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            background: transparent !important;
+          }
+          .print-preview-scroll {
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: transparent !important;
+            display: block !important;
+          }
+          .page-wrapper-print {
+            page-break-after: always !important;
+            break-after: page !important;
             margin: 0 !important;
             padding: 0 !important;
+            display: block !important;
           }
-          .a4-print-sheet {
+          .page-wrapper-print:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+          .a4-sheet-card {
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 6mm 7mm !important;
+            margin: 0 auto !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            max-height: 297mm !important;
             display: grid !important;
             grid-template-columns: repeat(2, 1fr) !important;
             grid-template-rows: repeat(4, 1fr) !important;
-            gap: 2.5mm !important;
-            width: 198mm !important;
-            height: 284mm !important;
-            max-height: 284mm !important;
+            gap: 3.5mm !important;
             box-sizing: border-box !important;
-            margin: 0 auto !important;
+            background: white !important;
           }
-          .card-item-print {
+          .card-unit {
             border: 1px dashed #64748b !important;
             border-radius: 4px !important;
             padding: 2.2mm 2.5mm !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            height: 100% !important;
+            min-height: auto !important;
             box-sizing: border-box !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
             background: #ffffff !important;
-            height: 100% !important;
-          }
-          .card-header-print {
-            display: flex !important;
-            align-items: center !important;
-            gap: 2mm !important;
-            border-bottom: 1.5px solid #0f172a !important;
-            padding-bottom: 1.5mm !important;
-            margin-bottom: 1.5mm !important;
-          }
-          .card-logo-container {
-            width: 11mm !important;
-            height: 11mm !important;
-            flex-shrink: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-          }
-          .card-logo-img {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: contain !important;
-            aspect-ratio: 1 / 1 !important;
-          }
-          .card-header-text {
-            flex: 1 !important;
-            text-align: center !important;
-            line-height: 1.15 !important;
-          }
-          .card-title-school {
-            font-size: 8.5pt !important;
-            font-weight: 900 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.3px !important;
-            color: #0f172a !important;
-          }
-          .card-title-exam {
-            font-size: 7.5pt !important;
-            font-weight: 800 !important;
-            text-transform: uppercase !important;
-            color: #312e81 !important;
-          }
-          .card-subtitle {
-            font-size: 6.5pt !important;
-            font-weight: 600 !important;
-            color: #475569 !important;
-          }
-          .card-body-print {
-            display: flex !important;
-            gap: 2.5mm !important;
-            align-items: flex-start !important;
-            margin-top: 1mm !important;
-          }
-          .card-photo-box {
-            width: 13mm !important;
-            height: 17mm !important;
-            flex-shrink: 0 !important;
-            border: 1px solid #94a3b8 !important;
-            background: #f8fafc !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            font-size: 6pt !important;
-            font-weight: 700 !important;
-            color: #94a3b8 !important;
-            line-height: 1.1 !important;
-          }
-          .card-details-print {
-            flex: 1 !important;
-            font-size: 7pt !important;
-            line-height: 1.3 !important;
-          }
-          .detail-row {
-            display: flex !important;
-            align-items: center !important;
-          }
-          .detail-label {
-            width: 16mm !important;
-            color: #475569 !important;
-            flex-shrink: 0 !important;
-          }
-          .detail-colon {
-            margin-right: 1mm !important;
-            color: #94a3b8 !important;
-            font-weight: bold !important;
-          }
-          .detail-val {
-            color: #0f172a !important;
-            white-space: nowrap !important;
             overflow: hidden !important;
-            text-overflow: ellipsis !important;
-          }
-          .detail-val.font-bold {
-            font-weight: 800 !important;
-          }
-          .detail-val.text-indigo {
-            color: #312e81 !important;
-          }
-          .card-footer-print {
-            border-top: 0.8px solid #cbd5e1 !important;
-            padding-top: 1mm !important;
-            margin-top: 1.5mm !important;
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: flex-end !important;
-            font-size: 5.8pt !important;
-          }
-          .card-notes {
-            font-style: italic !important;
-            color: #64748b !important;
-            max-width: 52% !important;
-            line-height: 1.15 !important;
-          }
-          .card-signature {
-            text-align: right !important;
-            line-height: 1.15 !important;
-          }
-          .sig-title {
-            font-weight: 700 !important;
-            color: #1e293b !important;
-          }
-          .sig-space {
-            height: 4mm !important;
           }
         }
       `}} />

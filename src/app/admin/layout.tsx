@@ -188,31 +188,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="flex h-screen overflow-hidden bg-zinc-50 text-zinc-800 font-sans selection:bg-zinc-200 selection:text-zinc-900">
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Modern Sidebar */}
+      {/* Modern Neutral Sidebar */}
       <aside 
         className={clsx(
-          "w-[280px] bg-slate-900 text-slate-300 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 border-r border-slate-800",
+          "w-[280px] bg-zinc-950 text-zinc-300 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 border-r border-zinc-900",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <button 
           onClick={() => setIsSidebarOpen(false)} 
-          className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden hover:bg-slate-800 p-1 rounded-lg transition-all"
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white md:hidden hover:bg-zinc-900 p-1 rounded-lg transition-all"
         >
           <X size={24} />
         </button>
 
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/10 p-1 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0 border border-white/10">
+        <div className="p-6 border-b border-zinc-900 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 flex items-center justify-center shadow-md border border-zinc-200 flex-shrink-0">
             <img 
               src={appLogo} 
               alt="Logo" 
@@ -222,12 +222,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <div className="min-w-0">
             <h1 className="text-base lg:text-lg font-bold text-white tracking-wide truncate" title={appName}>{appName}</h1>
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Control Panel</p>
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Control Panel</p>
           </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 space-y-1.5 px-4 custom-scrollbar">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">Main Menu</p>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-2">Main Menu</p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;
@@ -238,25 +238,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.path}
                 onClick={() => setIsSidebarOpen(false)}
                 className={clsx(
-                  "flex items-center justify-between px-3 py-3 rounded-xl font-medium transition-all duration-200 group",
+                  "flex items-center justify-between px-3 py-3 rounded-xl font-medium transition-all duration-200 group text-sm",
                   isActive 
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20" 
-                    : "hover:bg-slate-800 hover:text-white"
+                    ? "bg-white text-zinc-950 font-extrabold shadow-sm" 
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Icon size={20} className={isActive ? "text-white" : "text-slate-400 group-hover:text-indigo-400"} />
+                  <Icon size={19} className={isActive ? "text-zinc-950" : "text-zinc-400 group-hover:text-white"} />
                   {item.name}
                 </div>
-                {isActive && <ChevronRight size={16} className="text-indigo-300" />}
+                {isActive && <ChevronRight size={16} className="text-zinc-400" />}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-          <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group">
-            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> 
+        <div className="p-4 border-t border-zinc-900">
+          <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group text-sm">
+            <LogOut size={19} className="group-hover:-translate-x-1 transition-transform" /> 
             <span>Logout Admin</span>
           </button>
         </div>
@@ -265,11 +265,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
         {/* Top Navbar */}
-        <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 p-4 flex justify-between items-center z-10 sticky top-0">
+        <header className="bg-white/90 backdrop-blur-md shadow-sm border-b border-zinc-200 p-4 flex justify-between items-center z-10 sticky top-0">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)} 
-              className="text-slate-500 md:hidden hover:text-indigo-600 hover:bg-slate-100 p-1.5 rounded-lg transition-all"
+              className="text-zinc-600 md:hidden hover:text-zinc-900 hover:bg-zinc-100 p-1.5 rounded-lg transition-all"
             >
               <Menu size={24} />
             </button>

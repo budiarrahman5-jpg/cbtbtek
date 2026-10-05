@@ -121,16 +121,15 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans relative overflow-hidden bg-slate-900">
-      {/* Dynamic Background Elements */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-indigo-600 rounded-full mix-blend-multiply filter blur-[100px] opacity-50 animate-blob"></div>
-      <div className="absolute top-[20%] right-[-10%] w-[400px] h-[400px] bg-teal-500 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-2000"></div>
-      <div className="absolute bottom-[-20%] left-[20%] w-[600px] h-[600px] bg-blue-700 rounded-full mix-blend-multiply filter blur-[120px] opacity-40 animate-blob animation-delay-4000"></div>
+    <div className="min-h-screen flex flex-col font-sans relative overflow-hidden bg-zinc-950 text-zinc-100 selection:bg-zinc-800 selection:text-white">
+      {/* Dynamic Neutral Ambience (Tidak bentrok dengan warna logo apapun) */}
+      <div className="absolute top-[-25%] left-[-15%] w-[600px] h-[600px] bg-zinc-800/40 rounded-full filter blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-slate-800/40 rounded-full filter blur-[120px] pointer-events-none"></div>
 
-      {/* Header */}
-      <header className="relative z-10 bg-white/10 backdrop-blur-lg border-b border-white/10 text-white p-4 flex justify-between items-center shadow-sm">
+      {/* Header Netral */}
+      <header className="relative z-10 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/80 p-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/20 p-1 flex items-center justify-center shadow-lg border border-white/20 flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 flex items-center justify-center shadow-md border border-zinc-200 flex-shrink-0">
             <img 
               src={appLogo} 
               alt="Logo" 
@@ -139,8 +138,8 @@ export default function Home() {
             />
           </div>
           <div>
-            <h1 className="text-lg md:text-xl font-bold tracking-wider leading-tight">{appName}</h1>
-            <p className="text-xs text-blue-200 opacity-80">Platform Ujian Berbasis Komputer</p>
+            <h1 className="text-base md:text-lg font-bold tracking-wide text-white leading-tight">{appName}</h1>
+            <p className="text-xs text-zinc-400 font-medium">Platform Ujian Berbasis Komputer</p>
           </div>
         </div>
       </header>
@@ -148,23 +147,33 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 relative z-10">
         <div className="w-full max-w-md">
-          {/* Glassmorphism Card */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Selamat Datang</h2>
-              <p className="text-indigo-200 text-sm">Silakan masuk untuk memulai sesi ujian Anda</p>
+          {/* Neutral Glassmorphism Card */}
+          <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/90 p-8 rounded-3xl shadow-2xl shadow-black/40">
+            
+            {/* Logo Utama Terpusat di Card */}
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-2xl p-2.5 shadow-xl border border-zinc-200 flex items-center justify-center transition-transform hover:scale-105 duration-200">
+                <img 
+                  src={appLogo} 
+                  alt="Logo" 
+                  className="w-full h-full object-contain aspect-square" 
+                  onError={(e) => { (e.target as any).src = '/logo.png'; }} 
+                />
+              </div>
+              <h2 className="text-2xl font-extrabold text-white mb-1.5 tracking-tight">Selamat Datang</h2>
+              <p className="text-zinc-400 text-xs">Silakan masuk untuk memulai sesi ujian Anda</p>
             </div>
             
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-indigo-200 mb-2 uppercase tracking-wider">Username</label>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5 uppercase tracking-wider">Username</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-indigo-300 group-focus-within:text-teal-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-400 group-focus-within:text-white transition-colors">
                     <UserCircle className="w-5 h-5" />
                   </div>
                   <input 
                     type="text" 
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none text-white placeholder-indigo-300/50 transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-zinc-950/60 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-zinc-400 focus:border-zinc-400 outline-none text-white placeholder-zinc-500 text-sm font-medium transition-all"
                     placeholder="Masukkan username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -173,14 +182,14 @@ export default function Home() {
               </div>
               
               <div>
-                <label className="block text-xs font-semibold text-indigo-200 mb-2 uppercase tracking-wider">Password</label>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5 uppercase tracking-wider">Password</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-indigo-300 group-focus-within:text-teal-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-400 group-focus-within:text-white transition-colors">
                     <KeyRound className="w-5 h-5" />
                   </div>
                   <input 
                     type="password" 
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none text-white placeholder-indigo-300/50 transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-zinc-950/60 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-zinc-400 focus:border-zinc-400 outline-none text-white placeholder-zinc-500 text-sm font-medium transition-all"
                     placeholder="Masukkan password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -189,7 +198,7 @@ export default function Home() {
               </div>
 
               {errorMsg && (
-                <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm font-medium animate-pulse">
+                <div className="bg-red-950/60 border border-red-800/80 text-red-200 px-4 py-2.5 rounded-xl text-xs font-semibold animate-pulse">
                   {errorMsg}
                 </div>
               )}
@@ -197,20 +206,20 @@ export default function Home() {
               <button 
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-indigo-500 to-teal-400 hover:from-indigo-400 hover:to-teal-300 text-white py-3.5 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_25px_rgba(45,212,191,0.6)] transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 group mt-6"
+                className="w-full bg-white hover:bg-zinc-100 text-zinc-950 py-3.5 rounded-xl font-extrabold text-sm shadow-lg shadow-black/20 hover:shadow-black/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group mt-4 uppercase tracking-wider"
               >
                 {isLoading ? 'Memproses...' : (
                   <>
-                    MULAI UJIAN 
-                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    <span>MULAI UJIAN</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>
             </form>
           </div>
           
-          <div className="text-center mt-8">
-            <p className="text-xs text-white/40 font-medium tracking-wide">
+          <div className="text-center mt-6">
+            <p className="text-xs text-zinc-500 font-medium tracking-wide">
               &copy; {new Date().getFullYear()} {appName} by @budhii12
             </p>
           </div>
