@@ -8,30 +8,50 @@ import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
 // --- Komponen Interaktif Tarik Garis (Menjodohkan) ---
-const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
+const PAIR_PALETTE = [
+  { stroke: '#4f46e5', dotBg: 'bg-indigo-600', dotBorder: 'border-indigo-300 ring-indigo-100', cardActive: 'ring-2 ring-indigo-500 border-indigo-400 bg-indigo-50/40', badge: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  { stroke: '#059669', dotBg: 'bg-emerald-600', dotBorder: 'border-emerald-300 ring-emerald-100', cardActive: 'ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50/40', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { stroke: '#d97706', dotBg: 'bg-amber-600', dotBorder: 'border-amber-300 ring-amber-100', cardActive: 'ring-2 ring-amber-500 border-amber-400 bg-amber-50/40', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { stroke: '#e11d48', dotBg: 'bg-rose-600', dotBorder: 'border-rose-300 ring-rose-100', cardActive: 'ring-2 ring-rose-500 border-rose-400 bg-rose-50/40', badge: 'bg-rose-100 text-rose-700 border-rose-200' },
+  { stroke: '#7c3aed', dotBg: 'bg-purple-600', dotBorder: 'border-purple-300 ring-purple-100', cardActive: 'ring-2 ring-purple-500 border-purple-400 bg-purple-50/40', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
+  { stroke: '#0891b2', dotBg: 'bg-cyan-600', dotBorder: 'border-cyan-300 ring-cyan-100', cardActive: 'ring-2 ring-cyan-500 border-cyan-400 bg-cyan-50/40', badge: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  { stroke: '#ea580c', dotBg: 'bg-orange-600', dotBorder: 'border-orange-300 ring-orange-100', cardActive: 'ring-2 ring-orange-500 border-orange-400 bg-orange-50/40', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
+  { stroke: '#475569', dotBg: 'bg-slate-600', dotBorder: 'border-slate-300 ring-slate-100', cardActive: 'ring-2 ring-slate-500 border-slate-400 bg-slate-50/40', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+];
+
+const JodohkanInteractive = ({ 
+  soal, 
+  jawabanData, 
+  onChange,
+  fontSize = 'base' 
+}: {
+  soal: any;
+  jawabanData: any;
+  onChange: (data: any) => void;
+  fontSize?: 'sm' | 'base' | 'lg';
+}) => {
   const [premis, setPremis] = useState<any[]>([]);
   const [respons, setRespons] = useState<any[]>([]);
-  const [connections, setConnections] = useState<{premisId: string, responsId: string}[]>(jawabanData || []);
+  const [connections, setConnections] = useState<{premisId: string, responsId: string}[]>(Array.isArray(jawabanData) ? jawabanData : []);
   const [drawing, setDrawing] = useState<{premisId: string, startX: number, startY: number, curX: number, curY: number} | null>(null);
+  const [selectedPremisId, setSelectedPremisId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'garis' | 'pilihan'>('garis');
   const containerRef = useRef<HTMLDivElement>(null);
-  
   const [dots, setDots] = useState<Record<string, {x: number, y: number}>>({});
 
+  // Parse Opsi Premis & Respons
   useEffect(() => {
     try {
       let pData = typeof soal.opsi_a === 'string' ? JSON.parse(soal.opsi_a || '[]') : (soal.opsi_a || []);
       let rData = typeof soal.opsi_b === 'string' ? JSON.parse(soal.opsi_b || '[]') : (soal.opsi_b || []);
       
-      // Enforce array type to prevent crash on .map or spread, and filter invalid items
       pData = (Array.isArray(pData) ? pData : []).filter((p: any) => p && typeof p.id !== 'undefined' && typeof p.text !== 'undefined');
       rData = (Array.isArray(rData) ? rData : []).filter((r: any) => r && typeof r.id !== 'undefined' && typeof r.text !== 'undefined');
 
       setPremis(pData);
-      // Acak urutan respons agar ujian menantang
       setRespons([...rData].sort(() => Math.random() - 0.5));
     } catch(e) {
       console.error("Gagal parse opsi menjodohkan, mencoba mode teks fallback:", e);
-      // Fallback untuk format data lama yang bukan JSON (misalnya "Indonesia|Jepang")
       let legacyP = String(soal.opsi_a || '').split('|').map((t, i) => ({ id: `legacy-p-${i}`, text: t.trim() })).filter(p => p.text);
       let legacyR = String(soal.opsi_b || '').split('|').map((t, i) => ({ id: `legacy-r-${i}`, text: t.trim() })).filter(r => r.text);
       
@@ -40,15 +60,18 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
     }
   }, [soal]);
 
-  // Sync initial connections when switching questions
+  // Sync initial connections saat ganti soal
   useEffect(() => {
     setConnections(Array.isArray(jawabanData) ? jawabanData : []);
+    setSelectedPremisId(null);
   }, [soal]);
 
+  // Notifikasi perubahan jawaban ke parent
   useEffect(() => {
     onChange(connections);
   }, [connections]);
 
+  // Kalkulasi posisi titik koneksi SVG
   const updateDots = () => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -58,7 +81,10 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
       const el = document.getElementById(`dot-premis-${p.id}`);
       if (el) {
         const elRect = el.getBoundingClientRect();
-        newDots[`premis-${p.id}`] = { x: elRect.left - rect.left + elRect.width / 2, y: elRect.top - rect.top + elRect.height / 2 };
+        newDots[`premis-${p.id}`] = { 
+          x: elRect.left - rect.left + elRect.width / 2, 
+          y: elRect.top - rect.top + elRect.height / 2 
+        };
       }
     });
     
@@ -66,7 +92,10 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
       const el = document.getElementById(`dot-respons-${r.id}`);
       if (el) {
         const elRect = el.getBoundingClientRect();
-        newDots[`respons-${r.id}`] = { x: elRect.left - rect.left + elRect.width / 2, y: elRect.top - rect.top + elRect.height / 2 };
+        newDots[`respons-${r.id}`] = { 
+          x: elRect.left - rect.left + elRect.width / 2, 
+          y: elRect.top - rect.top + elRect.height / 2 
+        };
       }
     });
     setDots(newDots);
@@ -74,27 +103,38 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
 
   useEffect(() => {
     updateDots();
-    window.addEventListener('resize', updateDots);
-    window.addEventListener('scroll', updateDots, true);
-    const timer = setTimeout(updateDots, 800); // Tunggu render rich-text images
-    return () => {
-      window.removeEventListener('resize', updateDots);
-      window.removeEventListener('scroll', updateDots, true);
-      clearTimeout(timer);
-    };
-  }, [premis, respons]);
+    const timer1 = setTimeout(updateDots, 150);
+    const timer2 = setTimeout(updateDots, 600);
 
+    const handleResizeOrScroll = () => updateDots();
+    window.addEventListener('resize', handleResizeOrScroll);
+    window.addEventListener('scroll', handleResizeOrScroll, true);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      resizeObserver = new ResizeObserver(() => updateDots());
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      window.removeEventListener('resize', handleResizeOrScroll);
+      window.removeEventListener('scroll', handleResizeOrScroll, true);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [premis, respons, connections, viewMode, fontSize]);
+
+  // Interaksi Drag-to-pair dengan Pointer
   const handlePointerDown = (e: React.PointerEvent, id: string) => {
     if (!containerRef.current) return;
+    e.stopPropagation();
     const rect = containerRef.current.getBoundingClientRect();
     const startX = e.clientX - rect.left;
     const startY = e.clientY - rect.top;
     
-    // Hapus koneksi lama dari premis ini jika ada
-    setConnections(prev => prev.filter(c => c.premisId !== id));
     setDrawing({ premisId: id, startX, startY, curX: startX, curY: startY });
-    
-    // Tangkap pointer agar pergerakan cepat tetap terdeteksi
+    setSelectedPremisId(id);
     (e.target as Element).releasePointerCapture(e.pointerId);
   };
 
@@ -111,102 +151,423 @@ const JodohkanInteractive = ({ soal, jawabanData, onChange }: any) => {
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!drawing) return;
     
-    // Sembunyikan SVG sementara untuk mendeteksi elemen di bawah kursor
     const svgEl = document.getElementById('svg-overlay');
     if (svgEl) svgEl.style.display = 'none';
-    
     const target = document.elementFromPoint(e.clientX, e.clientY);
-    
     if (svgEl) svgEl.style.display = 'block';
 
     const dropZone = target?.closest('[data-respons-id]');
-    
     if (dropZone) {
       const responsId = dropZone.getAttribute('data-respons-id');
       if (responsId) {
-        setConnections(prev => {
-          // Hanya izinkan 1 koneksi per respons juga
-          const filtered = prev.filter(c => c.responsId !== responsId && c.premisId !== drawing.premisId);
-          return [...filtered, { premisId: drawing.premisId, responsId }];
-        });
+        connectPair(drawing.premisId, responsId);
       }
     }
     setDrawing(null);
   };
 
+  // Logika Menjodohkan
+  const connectPair = (premisId: string, responsId: string) => {
+    setConnections(prev => {
+      const filtered = prev.filter(c => c.premisId !== premisId && c.responsId !== responsId);
+      return [...filtered, { premisId, responsId }];
+    });
+    setSelectedPremisId(null);
+  };
+
+  const removeConnection = (premisId: string, responsId?: string) => {
+    setConnections(prev => prev.filter(c => {
+      if (responsId) return c.premisId !== premisId || c.responsId !== responsId;
+      return c.premisId !== premisId;
+    }));
+  };
+
+  const resetAllConnections = () => {
+    setConnections([]);
+    setSelectedPremisId(null);
+  };
+
+  // Helper Warna Palette Pasangan
+  const getPairPalette = (pId: string, rId?: string) => {
+    const idx = connections.findIndex(c => c.premisId === pId || (rId && c.responsId === rId));
+    if (idx === -1) return null;
+    return {
+      ...PAIR_PALETTE[idx % PAIR_PALETTE.length],
+      num: idx + 1
+    };
+  };
+
+  // Skala Ukuran Font & Styling Responsif
+  const cardFontClass = fontSize === 'sm'
+    ? 'text-[11px] sm:text-xs md:text-sm'
+    : fontSize === 'lg'
+      ? 'text-sm sm:text-base md:text-lg'
+      : 'text-xs sm:text-sm md:text-base';
+
+  const proseClass = clsx(
+    cardFontClass,
+    "prose prose-slate max-w-none break-words leading-snug sm:leading-relaxed select-text",
+    "[&_img]:max-h-16 sm:[&_img]:max-h-24 md:[&_img]:max-h-32 [&_img]:w-auto [&_img]:mx-auto [&_img]:object-contain [&_img]:rounded-md [&_img]:shadow-sm",
+    "[&_p]:m-0 [&_p+p]:mt-1"
+  );
+
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full flex flex-col md:flex-row gap-8 md:gap-24 select-none touch-none min-h-[400px] p-4 bg-slate-50/50 rounded-2xl border border-slate-100"
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-    >
-      <div className="absolute inset-x-0 top-0 text-center -mt-3 text-xs font-bold text-slate-400 bg-white inline-block px-4 border rounded-full mx-auto w-max shadow-sm">
-        Tarik titik dari kotak Kiri ke kotak Kanan (Klik garis untuk menghapus)
-      </div>
+    <div className="w-full space-y-3">
+      {/* Bar Navigasi & Info Bantuan Menjodohkan */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs">
+        <div className="flex items-center gap-1.5 text-indigo-900 font-medium">
+          <HelpCircle size={15} className="text-indigo-600 flex-shrink-0" />
+          <span className="hidden sm:inline">
+            {selectedPremisId 
+              ? "Sekarang ketuk kotak Respons di kanan untuk menjodohkan."
+              : "Ketuk/tarik dari Premis ke Respons. Ketuk pasangan untuk melepas."}
+          </span>
+          <span className="sm:hidden">
+            {selectedPremisId ? "Ketuk Respons pasangannya" : "Ketuk Premis lalu Respons"}
+          </span>
+        </div>
 
-      <svg id="svg-overlay" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 10 }}>
-        {connections.map(conn => {
-          const pDot = dots[`premis-${conn.premisId}`];
-          const rDot = dots[`respons-${conn.responsId}`];
-          if (!pDot || !rDot) return null;
-          return (
-            <line 
-              key={`${conn.premisId}-${conn.responsId}`}
-              x1={pDot.x} y1={pDot.y} x2={rDot.x} y2={rDot.y}
-              stroke="#4f46e5" strokeWidth="4" strokeLinecap="round"
-              className="pointer-events-auto cursor-pointer hover:stroke-rose-500 transition-colors"
-              onClick={() => setConnections(prev => prev.filter(c => c !== conn))}
-            />
-          );
-        })}
-        {drawing && (
-          <line 
-            x1={drawing.startX} y1={drawing.startY} x2={drawing.curX} y2={drawing.curY}
-            stroke="#818cf8" strokeWidth="4" strokeDasharray="5,5" strokeLinecap="round"
-          />
-        )}
-      </svg>
-
-      {/* Kolom Kiri: Premis */}
-      <div className="flex-1 flex flex-col gap-4 z-20 relative">
-        <h3 className="font-bold text-slate-500 text-sm tracking-wider uppercase mb-2 flex items-center gap-2"><Link2 size={16}/> PREMIS</h3>
-        {premis.map(p => (
-          <div key={p.id} className="relative bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center group">
-            <div dangerouslySetInnerHTML={{ __html: p.text }} className="flex-1 prose prose-slate prose-sm mr-4" />
-            <div 
-              id={`dot-premis-${p.id}`}
-              onPointerDown={(e) => handlePointerDown(e, p.id)}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {/* Toggle Mode Tampilan (Garis vs Pilihan Dropdown) */}
+          <div className="flex items-center bg-white p-0.5 rounded-lg border border-indigo-200 shadow-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('garis')}
               className={clsx(
-                "w-6 h-6 rounded-full cursor-grab active:cursor-grabbing border-4 flex-shrink-0 transition-all",
-                connections.some(c => c.premisId === p.id) ? "bg-indigo-600 border-indigo-200 ring-4 ring-indigo-100" : "bg-white border-slate-300 hover:border-indigo-400 hover:scale-110"
+                "px-2 py-1 rounded text-[11px] font-bold transition flex items-center gap-1",
+                viewMode === 'garis' ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-indigo-600"
               )}
-            />
+              title="Tampilan Visual Tarik Garis (Side by Side)"
+            >
+              <Link2 size={12} />
+              <span className="hidden xs:inline">Garis</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('pilihan')}
+              className={clsx(
+                "px-2 py-1 rounded text-[11px] font-bold transition flex items-center gap-1",
+                viewMode === 'pilihan' ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-indigo-600"
+              )}
+              title="Tampilan Daftar Pilihan (Sangat nyaman di layar HP kecil)"
+            >
+              <Grid size={12} />
+              <span className="hidden xs:inline">Pilihan</span>
+            </button>
           </div>
-        ))}
+
+          {/* Tombol Reset Jodohan */}
+          {connections.length > 0 && (
+            <button
+              type="button"
+              onClick={resetAllConnections}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1"
+              title="Reset semua pasangan pada soal ini"
+            >
+              <RotateCcw size={12} />
+              <span className="hidden sm:inline">Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Kolom Kanan: Respons */}
-      <div className="flex-1 flex flex-col gap-4 z-20 relative">
-        <h3 className="font-bold text-slate-500 text-sm tracking-wider uppercase mb-2 text-right">RESPONS</h3>
-        {respons.map(r => (
-          <div 
-            key={r.id} 
-            data-respons-id={r.id}
-            className="relative bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center group transition-colors hover:border-indigo-300"
-          >
-            <div 
-              id={`dot-respons-${r.id}`}
-              className={clsx(
-                "w-6 h-6 rounded-full border-4 flex-shrink-0 ml-1 mr-4 transition-all",
-                connections.some(c => c.responsId === r.id) ? "bg-indigo-600 border-indigo-200 ring-4 ring-indigo-100" : "bg-white border-slate-300"
-              )}
-            />
-            <div dangerouslySetInnerHTML={{ __html: r.text }} className="flex-1 prose prose-slate prose-sm" />
+      {/* MODE 1: VISUAL TARIK GARIS (2 Kolom Berdampingan Responsif) */}
+      {viewMode === 'garis' && (
+        <div 
+          ref={containerRef}
+          className="relative w-full select-none min-h-[300px] p-2 sm:p-4 bg-slate-50/70 rounded-2xl border border-slate-200/80"
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        >
+          {/* SVG Overlay Garis Penghubung */}
+          <svg id="svg-overlay" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 10 }}>
+            {connections.map(conn => {
+              const pDot = dots[`premis-${conn.premisId}`];
+              const rDot = dots[`respons-${conn.responsId}`];
+              if (!pDot || !rDot) return null;
+              
+              const palette = getPairPalette(conn.premisId, conn.responsId);
+              const strokeColor = palette ? palette.stroke : '#4f46e5';
+              const dx = Math.max(16, (rDot.x - pDot.x) * 0.45);
+              const pathData = `M ${pDot.x} ${pDot.y} C ${pDot.x + dx} ${pDot.y}, ${rDot.x - dx} ${rDot.y}, ${rDot.x} ${rDot.y}`;
+
+              return (
+                <g key={`${conn.premisId}-${conn.responsId}`}>
+                  {/* Garis bayangan transparan lebar agar mudah diklik/ditekan di HP */}
+                  <path 
+                    d={pathData}
+                    stroke="transparent"
+                    strokeWidth="20"
+                    fill="none"
+                    className="pointer-events-auto cursor-pointer"
+                    onClick={() => removeConnection(conn.premisId, conn.responsId)}
+                  />
+                  {/* Garis visual utama */}
+                  <path 
+                    d={pathData}
+                    stroke={strokeColor}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    fill="none"
+                    className="pointer-events-auto cursor-pointer hover:stroke-rose-500 transition-colors"
+                    onClick={() => removeConnection(conn.premisId, conn.responsId)}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Garis Saat Sedang Menarik */}
+            {drawing && (
+              <path 
+                d={`M ${drawing.startX} ${drawing.startY} C ${drawing.startX + Math.max(16, Math.abs(drawing.curX - drawing.startX) * 0.45)} ${drawing.startY}, ${drawing.curX - Math.max(16, Math.abs(drawing.curX - drawing.startX) * 0.45)} ${drawing.curY}, ${drawing.curX} ${drawing.curY}`}
+                stroke="#6366f1"
+                strokeWidth="3.5"
+                strokeDasharray="6,4"
+                strokeLinecap="round"
+                fill="none"
+              />
+            )}
+          </svg>
+
+          {/* Layout Grid 2 Kolom (Premis Kiri, Respons Kanan) */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-16 items-start relative z-20">
+            {/* Kolom Kiri: Premis */}
+            <div className="flex flex-col gap-2.5 sm:gap-3.5">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                <span className="font-extrabold text-slate-500 text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1">
+                  <Link2 size={13} className="text-indigo-600" /> PREMIS
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold">{premis.length} Butir</span>
+              </div>
+
+              {premis.map((p, idx) => {
+                const isSelected = selectedPremisId === p.id;
+                const palette = getPairPalette(p.id);
+                const isPaired = !!palette;
+
+                return (
+                  <div 
+                    key={p.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedPremisId(null);
+                      } else {
+                        setSelectedPremisId(p.id);
+                      }
+                    }}
+                    className={clsx(
+                      "relative p-2.5 sm:p-3.5 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
+                      isSelected
+                        ? "border-indigo-500 ring-2 ring-indigo-400 bg-indigo-50/70 shadow-md shadow-indigo-100"
+                        : isPaired
+                          ? `${palette.cardActive} shadow-xs`
+                          : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50/60 shadow-xs"
+                    )}
+                  >
+                    {/* Header Item: Nomor Urut & Badge Pasangan */}
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] sm:text-xs font-black text-slate-400 flex items-center gap-1">
+                        #{idx + 1}
+                      </span>
+                      {palette && (
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeConnection(p.id);
+                          }}
+                          className={clsx(
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
+                            palette.badge
+                          )}
+                          title="Klik untuk memutuskan hubungan"
+                        >
+                          P{palette.num}
+                          <X size={10} />
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Konten Soal */}
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: p.text }} 
+                      className={clsx(proseClass, "flex-1 mr-2 sm:mr-3")} 
+                    />
+
+                    {/* Titik Koneksi Kanan (Drag Dot) */}
+                    <div 
+                      id={`dot-premis-${p.id}`}
+                      onPointerDown={(e) => handlePointerDown(e, p.id)}
+                      className={clsx(
+                        "absolute -right-2 sm:-right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 sm:border-3 cursor-crosshair touch-none transition-transform z-30 flex items-center justify-center",
+                        palette 
+                          ? `${palette.dotBg} border-white ring-2 ring-indigo-200` 
+                          : isSelected
+                            ? "bg-indigo-600 border-white ring-4 ring-indigo-300 scale-125"
+                            : "bg-white border-slate-400 hover:border-indigo-500 hover:scale-110"
+                      )}
+                      title="Tarik titik ini ke kotak Respons"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Kolom Kanan: Respons */}
+            <div className="flex flex-col gap-2.5 sm:gap-3.5">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                <span className="font-extrabold text-slate-500 text-[10px] sm:text-xs tracking-wider uppercase text-right w-full">
+                  RESPONS
+                </span>
+              </div>
+
+              {respons.map((r, idx) => {
+                const palette = getPairPalette('', r.id);
+                const isPaired = !!palette;
+
+                return (
+                  <div 
+                    key={r.id} 
+                    data-respons-id={r.id}
+                    onClick={() => {
+                      if (selectedPremisId) {
+                        connectPair(selectedPremisId, r.id);
+                      } else if (isPaired) {
+                        // Jika sudah ada pasangan dan diklik langsung, lepas pasangan
+                        const match = connections.find(c => c.responsId === r.id);
+                        if (match) removeConnection(match.premisId, r.id);
+                      }
+                    }}
+                    className={clsx(
+                      "relative p-2.5 sm:p-3.5 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
+                      selectedPremisId
+                        ? "border-dashed border-indigo-400 bg-indigo-50/30 hover:border-indigo-600 hover:bg-indigo-100/60 ring-1 ring-indigo-200 shadow-xs"
+                        : isPaired
+                          ? `${palette.cardActive} shadow-xs`
+                          : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50/60 shadow-xs"
+                    )}
+                  >
+                    {/* Header Item Respons: Badge Pasangan & Nomor */}
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      {palette ? (
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const match = connections.find(c => c.responsId === r.id);
+                            if (match) removeConnection(match.premisId, r.id);
+                          }}
+                          className={clsx(
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
+                            palette.badge
+                          )}
+                          title="Klik untuk memutuskan hubungan"
+                        >
+                          P{palette.num}
+                          <X size={10} />
+                        </span>
+                      ) : <span />}
+                      <span className="text-[10px] sm:text-xs font-black text-slate-400">
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                    </div>
+
+                    {/* Titik Koneksi Kiri (Drop Dot) */}
+                    <div 
+                      id={`dot-respons-${r.id}`}
+                      className={clsx(
+                        "absolute -left-2 sm:-left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 sm:border-3 pointer-events-none transition-all z-30",
+                        palette 
+                          ? `${palette.dotBg} border-white ring-2 ring-indigo-200` 
+                          : selectedPremisId
+                            ? "bg-indigo-200 border-indigo-400 animate-pulse"
+                            : "bg-white border-slate-400"
+                      )}
+                    />
+
+                    {/* Konten Teks Respons */}
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: r.text }} 
+                      className={clsx(proseClass, "flex-1 ml-2 sm:ml-3")} 
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* MODE 2: DAFTAR PILIHAN (Dropdown Mode - Sangat Nyaman di HP Layar Sempit) */}
+      {viewMode === 'pilihan' && (
+        <div className="space-y-3 p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-200">
+          <p className="text-xs text-slate-500 font-medium pb-2 border-b border-slate-200">
+            Pilih pasangan respons yang sesuai untuk setiap butir premis di bawah ini:
+          </p>
+
+          <div className="space-y-3">
+            {premis.map((p, idx) => {
+              const currentConn = connections.find(c => c.premisId === p.id);
+              const palette = getPairPalette(p.id);
+
+              return (
+                <div 
+                  key={p.id}
+                  className={clsx(
+                    "p-3 rounded-xl border bg-white shadow-xs transition space-y-2",
+                    palette ? palette.cardActive : "border-slate-200"
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-black text-xs flex items-center justify-center">
+                      {idx + 1}
+                    </span>
+                    <div dangerouslySetInnerHTML={{ __html: p.text }} className={clsx(proseClass, "flex-1")} />
+                  </div>
+
+                  {/* Dropdown Pemilihan Respons */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    <span className="text-[11px] sm:text-xs font-bold text-slate-500 whitespace-nowrap">
+                      Pasangan:
+                    </span>
+                    <select
+                      value={currentConn?.responsId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) {
+                          removeConnection(p.id);
+                        } else {
+                          connectPair(p.id, val);
+                        }
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                    >
+                      <option value="">-- Belum Dipasangkan --</option>
+                      {respons.map((r, rIdx) => {
+                        const plainText = r.text.replace(/<[^>]*>?/gm, '').trim();
+                        return (
+                          <option key={r.id} value={r.id}>
+                            ({String.fromCharCode(65 + rIdx)}) {plainText.slice(0, 45)}{plainText.length > 45 ? '...' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    {currentConn && (
+                      <button
+                        type="button"
+                        onClick={() => removeConnection(p.id)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition"
+                        title="Hapus pasangan"
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1323,6 +1684,7 @@ export default function UjianPage() {
                 soal={soalAktif} 
                 jawabanData={jawaban[soalAktif.id]} 
                 onChange={(data: any) => handleJawaban(soalAktif.id, data)}
+                fontSize={fontSize}
               />
             )}
 
