@@ -121,15 +121,15 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans relative overflow-hidden bg-zinc-950 text-zinc-100 selection:bg-zinc-800 selection:text-white">
-      {/* Dynamic Neutral Ambience (Tidak bentrok dengan warna logo apapun) */}
-      <div className="absolute top-[-25%] left-[-15%] w-[600px] h-[600px] bg-zinc-800/40 rounded-full filter blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-slate-800/40 rounded-full filter blur-[120px] pointer-events-none"></div>
+    <div className="min-h-screen flex flex-col font-sans relative overflow-hidden bg-slate-50 text-slate-800 selection:bg-blue-100 selection:text-blue-900">
+      {/* Dynamic Soft Ambient Dots / Lighting */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-400/10 rounded-full filter blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-red-400/10 rounded-full filter blur-[100px] pointer-events-none"></div>
 
-      {/* Header Netral */}
-      <header className="relative z-10 bg-zinc-900/60 backdrop-blur-md border-b border-zinc-800/80 p-4 flex justify-between items-center shadow-sm">
+      {/* Header Bagian Atas: Warna Biru dan Merah Sesuai Logo */}
+      <header className="relative z-10 bg-gradient-to-r from-blue-700 via-indigo-700 to-red-600 text-white p-4 shadow-md flex justify-between items-center border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 flex items-center justify-center shadow-md border border-zinc-200 flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 flex items-center justify-center shadow-lg border border-white/30 flex-shrink-0">
             <img 
               src={appLogo} 
               alt="Logo" 
@@ -139,20 +139,22 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-base md:text-lg font-bold tracking-wide text-white leading-tight">{appName}</h1>
-            <p className="text-xs text-zinc-400 font-medium">Platform Ujian Berbasis Komputer</p>
+            <p className="text-xs text-blue-100/90 font-medium">Platform Ujian Berbasis Komputer</p>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-4 relative z-10">
+      {/* Main Content Area - Tema Putih Bersih & Cantik */}
+      <main className="flex-1 flex items-center justify-center p-4 relative z-10 my-4 sm:my-8">
         <div className="w-full max-w-md">
-          {/* Neutral Glassmorphism Card */}
-          <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/90 p-8 rounded-3xl shadow-2xl shadow-black/40">
-            
+          {/* Card Putih Elegan dengan Shadow Mewah */}
+          <div className="bg-white border border-slate-200/90 p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(30,58,138,0.09)] relative overflow-hidden">
+            {/* Top Border Accent Biru-Merah */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600"></div>
+
             {/* Logo Utama Terpusat di Card */}
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-2xl p-2.5 shadow-xl border border-zinc-200 flex items-center justify-center transition-transform hover:scale-105 duration-200">
+            <div className="text-center mb-6 pt-2">
+              <div className="w-20 h-20 mx-auto mb-3 bg-white rounded-2xl p-2 shadow-md border border-slate-200 flex items-center justify-center transition-transform hover:scale-105 duration-200">
                 <img 
                   src={appLogo} 
                   alt="Logo" 
@@ -160,20 +162,20 @@ export default function Home() {
                   onError={(e) => { (e.target as any).src = '/logo.png'; }} 
                 />
               </div>
-              <h2 className="text-2xl font-extrabold text-white mb-1.5 tracking-tight">Selamat Datang</h2>
-              <p className="text-zinc-400 text-xs">Silakan masuk untuk memulai sesi ujian Anda</p>
+              <h2 className="text-2xl font-black text-slate-800 mb-1 tracking-tight">Selamat Datang</h2>
+              <p className="text-slate-500 text-xs font-medium">Silakan masuk untuk memulai sesi ujian Anda</p>
             </div>
             
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-zinc-300 mb-1.5 uppercase tracking-wider">Username</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Username</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-400 group-focus-within:text-white transition-colors">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
                     <UserCircle className="w-5 h-5" />
                   </div>
                   <input 
                     type="text" 
-                    className="w-full pl-10 pr-4 py-3 bg-zinc-950/60 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-zinc-400 focus:border-zinc-400 outline-none text-white placeholder-zinc-500 text-sm font-medium transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold transition-all"
                     placeholder="Masukkan username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -182,14 +184,14 @@ export default function Home() {
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-zinc-300 mb-1.5 uppercase tracking-wider">Password</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Password</label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-400 group-focus-within:text-white transition-colors">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
                     <KeyRound className="w-5 h-5" />
                   </div>
                   <input 
                     type="password" 
-                    className="w-full pl-10 pr-4 py-3 bg-zinc-950/60 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-zinc-400 focus:border-zinc-400 outline-none text-white placeholder-zinc-500 text-sm font-medium transition-all"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none text-slate-800 placeholder-slate-400 text-sm font-semibold transition-all"
                     placeholder="Masukkan password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -198,15 +200,16 @@ export default function Home() {
               </div>
 
               {errorMsg && (
-                <div className="bg-red-950/60 border border-red-800/80 text-red-200 px-4 py-2.5 rounded-xl text-xs font-semibold animate-pulse">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-xl text-xs font-semibold animate-pulse">
                   {errorMsg}
                 </div>
               )}
               
+              {/* Tombol Login Gradasi Biru ke Merah */}
               <button 
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-white hover:bg-zinc-100 text-zinc-950 py-3.5 rounded-xl font-extrabold text-sm shadow-lg shadow-black/20 hover:shadow-black/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group mt-4 uppercase tracking-wider"
+                className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-700 hover:via-indigo-700 hover:to-red-700 text-white py-3.5 rounded-xl font-black text-sm shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group mt-5 uppercase tracking-wider"
               >
                 {isLoading ? 'Memproses...' : (
                   <>
@@ -219,7 +222,7 @@ export default function Home() {
           </div>
           
           <div className="text-center mt-6">
-            <p className="text-xs text-zinc-500 font-medium tracking-wide">
+            <p className="text-xs text-slate-400 font-semibold tracking-wide">
               &copy; {new Date().getFullYear()} {appName} by @budhii12
             </p>
           </div>

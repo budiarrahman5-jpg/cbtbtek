@@ -510,6 +510,116 @@ export default function KelolaSiswaPage() {
     }
   };
 
+  const handleCetakKartu = () => {
+    const cardSheets = document.querySelectorAll('.a4-sheet-card');
+    if (!cardSheets || cardSheets.length === 0) {
+      alert('Tidak ada kartu yang dapat dicetak.');
+      return;
+    }
+
+    // Ambil style lembar dan kartu
+    let sheetsHtml = '';
+    cardSheets.forEach((sheet, idx) => {
+      const isLast = idx === cardSheets.length - 1;
+      sheetsHtml += `
+        <div class="print-single-a4" style="${isLast ? 'page-break-after: auto; break-after: auto;' : 'page-break-after: always; break-after: page;'}">
+          ${sheet.innerHTML}
+        </div>
+      `;
+    });
+
+    // Ambil semua tag style dan link CSS halaman
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map(el => el.outerHTML)
+      .join('\n');
+
+    let iframe = document.getElementById('iframe-cetak-kartu-cbt') as HTMLIFrameElement;
+    if (iframe) {
+      iframe.remove();
+    }
+    iframe = document.createElement('iframe');
+    iframe.id = 'iframe-cetak-kartu-cbt';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.zIndex = '-9999';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${kartuConfig.judulUjian || 'Kartu Peserta Ujian'}</title>
+          ${styles}
+          <style>
+            @page {
+              size: 210mm 297mm portrait;
+              margin: 4mm 5mm;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #0f172a !important;
+              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            .print-single-a4 {
+              width: 200mm !important;
+              height: 288mm !important;
+              max-height: 288mm !important;
+              margin: 0 auto !important;
+              padding: 2mm !important;
+              display: grid !important;
+              grid-template-columns: repeat(2, 1fr) !important;
+              grid-template-rows: repeat(4, 1fr) !important;
+              gap: 3mm !important;
+              box-sizing: border-box !important;
+              background: #ffffff !important;
+            }
+            .card-unit {
+              border: 1px dashed #64748b !important;
+              border-radius: 6px !important;
+              padding: 2.2mm 2.5mm !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
+              height: 100% !important;
+              max-height: 68mm !important;
+              box-sizing: border-box !important;
+              background: #ffffff !important;
+              overflow: hidden !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${sheetsHtml}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }, 450);
+  };
+
   const filteredSiswa = siswa.filter(s => 
     s.nama?.toLowerCase().includes(search.toLowerCase()) || 
     s.username?.toLowerCase().includes(search.toLowerCase())
@@ -1105,7 +1215,7 @@ export default function KelolaSiswaPage() {
                 setSearchKartu('');
                 setModalKartu(true);
               }}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-md shadow-indigo-600/25 text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+              className="bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-700 hover:to-red-700 text-white font-black px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/25 text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               <CreditCard size={16} />
               <span>Cetak Kartu Ujian (A4)</span>
@@ -1299,7 +1409,7 @@ export default function KelolaSiswaPage() {
                   type="button"
                   disabled={isSavingFoto}
                   onClick={handleSaveFotoModal}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white py-2.5 text-xs font-bold rounded-xl shadow-md transition-all active:scale-95"
+                  className="flex-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-700 hover:to-red-700 disabled:opacity-50 text-white py-2.5 text-xs font-bold rounded-xl shadow-md transition-all active:scale-95"
                 >
                   {isSavingFoto ? 'Menyimpan...' : 'Simpan Foto'}
                 </button>
@@ -1317,14 +1427,14 @@ export default function KelolaSiswaPage() {
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col my-auto max-h-[96vh] print-modal-box">
             
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0 no-print">
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-700 via-indigo-700 to-red-600 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0 no-print shadow-md">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600 rounded-xl shadow-md">
+                <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl shadow-md border border-white/20">
                   <CreditCard className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base sm:text-lg">Cetak Kartu Peserta Ujian</h3>
-                  <p className="text-xs text-slate-300 font-medium">Format 8 Kartu per Lembar A4 (2 Kolom x 4 Baris) • Tampilan Cetak 100% Sesuai Preview</p>
+                  <p className="text-xs text-blue-100 font-medium">Format 8 Kartu per Lembar A4 (2 Kolom x 4 Baris) • Tampilan Cetak 100% Sesuai Preview</p>
                 </div>
               </div>
 
@@ -1560,9 +1670,9 @@ export default function KelolaSiswaPage() {
 
                       <button
                         type="button"
-                        onClick={() => window.print()}
+                        onClick={handleCetakKartu}
                         disabled={filteredForPrint.length === 0}
-                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-black px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 text-xs flex items-center gap-2 transition-all active:scale-95 flex-shrink-0"
+                        className="bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-700 hover:to-red-700 disabled:bg-slate-300 text-white font-black px-6 py-2.5 rounded-xl shadow-lg shadow-blue-600/30 text-xs flex items-center gap-2 transition-all active:scale-95 flex-shrink-0"
                       >
                         <Printer size={16} />
                         <span>Cetak / Simpan PDF</span>

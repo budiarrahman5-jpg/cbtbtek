@@ -188,31 +188,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-50 text-zinc-800 font-sans selection:bg-zinc-200 selection:text-zinc-900">
+    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-800 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Modern Neutral Sidebar */}
+      {/* Modern Sidebar Tema Biru & Merah Sesuai Logo */}
       <aside 
         className={clsx(
-          "w-[280px] bg-zinc-950 text-zinc-300 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 border-r border-zinc-900",
+          "w-[280px] bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 text-slate-200 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 border-r border-blue-900/40",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <button 
           onClick={() => setIsSidebarOpen(false)} 
-          className="absolute top-4 right-4 text-zinc-400 hover:text-white md:hidden hover:bg-zinc-900 p-1 rounded-lg transition-all"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden hover:bg-white/10 p-1 rounded-lg transition-all"
         >
           <X size={24} />
         </button>
 
-        <div className="p-6 border-b border-zinc-900 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-white p-1 flex items-center justify-center shadow-md border border-zinc-200 flex-shrink-0">
+        {/* Kop Sidebar dengan Brand Logo */}
+        <div className="p-5 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl overflow-hidden bg-white p-1.5 flex items-center justify-center shadow-lg shadow-blue-500/25 border border-white/20 flex-shrink-0">
             <img 
               src={appLogo} 
               alt="Logo" 
@@ -221,13 +222,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             />
           </div>
           <div className="min-w-0">
-            <h1 className="text-base lg:text-lg font-bold text-white tracking-wide truncate" title={appName}>{appName}</h1>
-            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Control Panel</p>
+            <h1 className="text-base font-extrabold text-white tracking-wide truncate" title={appName}>{appName}</h1>
+            <p className="text-[11px] text-blue-200 font-semibold tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              Admin Control Panel
+            </p>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-6 space-y-1.5 px-4 custom-scrollbar">
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-2">Main Menu</p>
+        {/* Accent Bar Biru-Merah */}
+        <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-red-500 opacity-90 shadow-sm"></div>
+
+        {/* Navigasi Menu */}
+        <nav className="flex-1 overflow-y-auto py-5 space-y-1.5 px-3.5 custom-scrollbar">
+          <p className="text-[11px] font-bold text-blue-300/80 uppercase tracking-wider mb-3 px-2.5">Menu Utama</p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;
@@ -238,24 +246,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.path}
                 onClick={() => setIsSidebarOpen(false)}
                 className={clsx(
-                  "flex items-center justify-between px-3 py-3 rounded-xl font-medium transition-all duration-200 group text-sm",
+                  "flex items-center justify-between px-3.5 py-3 rounded-xl font-bold transition-all duration-200 group text-sm",
                   isActive 
-                    ? "bg-white text-zinc-950 font-extrabold shadow-sm" 
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                    ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 text-white shadow-lg shadow-blue-900/50 ring-1 ring-white/20 scale-[1.02]" 
+                    : "text-slate-300 hover:bg-white/10 hover:text-white"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Icon size={19} className={isActive ? "text-zinc-950" : "text-zinc-400 group-hover:text-white"} />
-                  {item.name}
+                  <Icon 
+                    size={19} 
+                    className={clsx(
+                      "transition-transform group-hover:scale-110",
+                      isActive ? "text-white" : "text-blue-300 group-hover:text-red-300"
+                    )} 
+                  />
+                  <span>{item.name}</span>
                 </div>
-                {isActive && <ChevronRight size={16} className="text-zinc-400" />}
+                {isActive && <ChevronRight size={16} className="text-white/90" />}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-zinc-900">
-          <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-3 w-full text-left rounded-xl font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group text-sm">
+        {/* Footer Logout */}
+        <div className="p-3.5 border-t border-blue-900/40 bg-black/20">
+          <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-xl font-bold text-red-400 hover:bg-red-500/15 hover:text-red-300 transition-all group text-sm">
             <LogOut size={19} className="group-hover:-translate-x-1 transition-transform" /> 
             <span>Logout Admin</span>
           </button>
@@ -264,17 +279,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
-        {/* Top Navbar */}
-        <header className="bg-white/90 backdrop-blur-md shadow-sm border-b border-zinc-200 p-4 flex justify-between items-center z-10 sticky top-0">
+        {/* Top Navbar dengan Aksen Biru-Merah */}
+        <header className="bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 p-4 flex justify-between items-center z-10 sticky top-0 relative">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600"></div>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)} 
-              className="text-zinc-600 md:hidden hover:text-zinc-900 hover:bg-zinc-100 p-1.5 rounded-lg transition-all"
+              className="text-slate-600 md:hidden hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-all"
             >
               <Menu size={24} />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
                 {navItems.find(i => i.path === pathname)?.name || 'Admin Panel'}
               </h2>
             </div>
