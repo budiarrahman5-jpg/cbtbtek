@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { List, Edit, Trash2, Plus, Copy, Eye, X, CheckCircle2, Archive } from 'lucide-react';
+import { List, Edit, Trash2, Plus, Copy, Eye, X, CheckCircle2, Archive, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 export default function KelolaSoalPage() {
   const [soal, setSoal] = useState<any[]>([]);
@@ -17,6 +17,27 @@ export default function KelolaSoalPage() {
   const [selectedSoal, setSelectedSoal] = useState<string[]>([]);
   const [targetPaketId, setTargetPaketId] = useState('');
   const [previewSoal, setPreviewSoal] = useState<any>(null);
+
+  // Zoom Gambar Modal
+  const [zoomImageSrc, setZoomImageSrc] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState<number>(1);
+  const [zoomPosition, setZoomPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingZoom, setIsDraggingZoom] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({ startX: 0, startY: 0, posX: 0, posY: 0 });
+
+  const openImageZoom = (src: string) => {
+    setZoomImageSrc(src);
+    setZoomScale(1);
+    setZoomPosition({ x: 0, y: 0 });
+    setIsDraggingZoom(false);
+  };
+
+  const closeImageZoom = () => {
+    setZoomImageSrc(null);
+    setZoomScale(1);
+    setZoomPosition({ x: 0, y: 0 });
+    setIsDraggingZoom(false);
+  };
 
   useEffect(() => {
     fetchPaket();
@@ -274,7 +295,16 @@ export default function KelolaSoalPage() {
                 <X size={24} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <div 
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.tagName.toLowerCase() === 'img') {
+                  const img = target as HTMLImageElement;
+                  if (img.src) openImageZoom(img.currentSrc || img.src);
+                }
+              }}
+              className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar [&_img]:cursor-zoom-in [&_img]:rounded-lg [&_img]:transition hover:[&_img]:brightness-95"
+            >
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
                 <div className="flex justify-between items-start mb-4">
                   <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded font-bold border border-slate-200">
@@ -359,6 +389,128 @@ export default function KelolaSoalPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL ZOOM / PERBESAR GAMBAR SOAL */}
+      {zoomImageSrc && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-between p-2 sm:p-4 select-none animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeImageZoom();
+          }}
+        >
+          {/* Top Control Bar */}
+          <div className="w-full max-w-4xl bg-slate-900/90 border border-slate-700/80 rounded-2xl px-4 py-2.5 text-white flex items-center justify-between shadow-2xl backdrop-blur-md flex-shrink-0 z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-xl shadow-md">
+                <ZoomIn size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold tracking-wide">Pratinjau Gambar Soal</h3>
+                <p className="text-[11px] text-slate-400 hidden sm:block">Perbesar gambar untuk melihat detail soal & grafik</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => setZoomScale(prev => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors active:scale-95"
+                title="Perkecil (-)"
+              >
+                <ZoomOut size={18} />
+              </button>
+
+              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-blue-400 min-w-[56px] text-center">
+                {Math.round(zoomScale * 100)}%
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setZoomScale(prev => Math.min(4, Number((prev + 0.25).toFixed(2))))}
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors active:scale-95"
+                title="Perbesar (+)"
+              >
+                <ZoomIn size={18} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setZoomScale(1); setZoomPosition({ x: 0, y: 0 }); }}
+                className="px-2.5 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors text-xs font-medium flex items-center gap-1 active:scale-95"
+                title="Reset Ukuran (100%)"
+              >
+                <RotateCcw size={15} />
+                <span className="hidden md:inline text-[11px]">Reset</span>
+              </button>
+
+              <div className="h-5 w-[1px] bg-slate-700 mx-1" />
+
+              <button
+                type="button"
+                onClick={closeImageZoom}
+                className="px-3 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                title="Tutup (ESC)"
+              >
+                <X size={16} />
+                <span>Tutup</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Canvas Area */}
+          <div 
+            className="flex-1 w-full max-w-5xl flex items-center justify-center overflow-hidden my-2 sm:my-3 relative cursor-grab active:cursor-grabbing touch-none"
+            onWheel={(e) => {
+              e.preventDefault();
+              if (e.deltaY < 0) {
+                setZoomScale(prev => Math.min(4, Number((prev + 0.2).toFixed(2))));
+              } else {
+                setZoomScale(prev => Math.max(0.5, Number((prev - 0.2).toFixed(2))));
+              }
+            }}
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              setIsDraggingZoom(true);
+              dragStartRef.current = {
+                startX: e.clientX,
+                startY: e.clientY,
+                posX: zoomPosition.x,
+                posY: zoomPosition.y
+              };
+            }}
+            onMouseMove={(e) => {
+              if (!isDraggingZoom) return;
+              const dx = e.clientX - dragStartRef.current.startX;
+              const dy = e.clientY - dragStartRef.current.startY;
+              setZoomPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy
+              });
+            }}
+            onMouseUp={() => setIsDraggingZoom(false)}
+            onMouseLeave={() => setIsDraggingZoom(false)}
+          >
+            <div 
+              className="transition-transform duration-75 select-none max-h-full max-w-full flex items-center justify-center"
+              style={{
+                transform: `translate3d(${zoomPosition.x}px, ${zoomPosition.y}px, 0px) scale(${zoomScale})`,
+                transformOrigin: 'center center'
+              }}
+            >
+              <img
+                src={zoomImageSrc}
+                alt="Gambar Soal Ujian"
+                className="max-h-[72vh] max-w-[88vw] object-contain rounded-2xl shadow-2xl pointer-events-none select-none bg-white/5 border border-white/10 ring-1 ring-white/10"
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Hint */}
+          <div className="bg-slate-900/85 border border-slate-700/60 rounded-full px-4 py-1.5 text-slate-300 text-[11px] sm:text-xs flex items-center gap-2 shadow-lg backdrop-blur-md text-center">
+            <span>💡 <b>Geser mouse</b> untuk menggeser gambar • <b>Scroll roda mouse</b> atau tombol <b>(+ / -)</b> untuk zoom • Tekan <b>Tutup</b> untuk keluar</span>
           </div>
         </div>
       )}

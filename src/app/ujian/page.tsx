@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, ChevronDown, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, ShieldCheck, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle } from 'lucide-react';
+import { Laptop, Clock, Grid, ChevronLeft, ChevronRight, ChevronDown, HelpCircle, CheckCircle2, Link2, Lock, Maximize2, ShieldAlert, ShieldCheck, Trophy, Award, Sparkles, AlertTriangle, AlertCircle, Home, Check, ArrowRight, BookOpen, Eye, X, XCircle, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 import 'katex/dist/katex.min.css';
 
@@ -279,6 +279,118 @@ export default function UjianPage() {
   // Ref dan State untuk Scroll Tampilan Soal & Opsi Jawaban
   const questionScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollDown, setCanScrollDown] = useState(false);
+
+  // Fitur Zoom / Perbesar Gambar Soal (Lightbox Modal)
+  const [zoomImageSrc, setZoomImageSrc] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState<number>(1);
+  const [zoomPosition, setZoomPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingZoom, setIsDraggingZoom] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({ startX: 0, startY: 0, posX: 0, posY: 0 });
+
+  const openImageZoom = (src: string) => {
+    setZoomImageSrc(src);
+    setZoomScale(1);
+    setZoomPosition({ x: 0, y: 0 });
+    setIsDraggingZoom(false);
+  };
+
+  const closeImageZoom = () => {
+    setZoomImageSrc(null);
+    setZoomScale(1);
+    setZoomPosition({ x: 0, y: 0 });
+    setIsDraggingZoom(false);
+  };
+
+  // Keyboard shortcut listener untuk Zoom Modal
+  useEffect(() => {
+    if (!zoomImageSrc) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeImageZoom();
+      } else if (e.key === '+' || e.key === '=') {
+        setZoomScale(prev => Math.min(4, Number((prev + 0.25).toFixed(2))));
+      } else if (e.key === '-' || e.key === '_') {
+        setZoomScale(prev => Math.max(0.5, Number((prev - 0.25).toFixed(2))));
+      } else if (e.key === '0') {
+        setZoomScale(1);
+        setZoomPosition({ x: 0, y: 0 });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zoomImageSrc]);
+
+  // Pasang tombol kaca pembesar & efek zoom pada semua gambar di area soal
+  useEffect(() => {
+    const container = questionScrollRef.current;
+    if (!container) return;
+
+    const setupZoomableImages = () => {
+      const imgs = container.querySelectorAll('img');
+      imgs.forEach((img) => {
+        if (img.getAttribute('data-cbt-zoom-ready') === 'true') return;
+        img.setAttribute('data-cbt-zoom-ready', 'true');
+
+        img.classList.add('cursor-zoom-in', 'hover:opacity-95', 'transition-all', 'rounded-lg');
+        img.title = 'Klik untuk memperbesar gambar';
+
+        let parent = img.parentElement;
+        if (!parent?.classList.contains('cbt-img-zoom-container')) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'cbt-img-zoom-container relative inline-block max-w-full my-2 group select-none';
+          img.parentNode?.insertBefore(wrapper, img);
+          wrapper.appendChild(img);
+          parent = wrapper;
+        }
+
+        if (!parent.querySelector('.cbt-magnifier-btn')) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'cbt-magnifier-btn absolute top-2 right-2 bg-slate-900/80 hover:bg-blue-600 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-lg backdrop-blur-sm flex items-center gap-1.5 transition-all opacity-85 group-hover:opacity-100 cursor-pointer select-none border border-white/20 active:scale-95 z-10';
+          btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg><span class="text-[11px] font-sans font-bold">Perbesar</span>`;
+          btn.title = 'Perbesar Gambar';
+
+          const handleTrigger = (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openImageZoom(img.currentSrc || img.src);
+          };
+
+          btn.addEventListener('click', handleTrigger);
+          img.addEventListener('click', handleTrigger);
+
+          parent.appendChild(btn);
+        }
+      });
+    };
+
+    setupZoomableImages();
+    const timer = setTimeout(setupZoomableImages, 250);
+    return () => clearTimeout(timer);
+  }, [soalList, indexSoal, fontSize]);
+
+  const handleQuestionContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const zoomBtn = target.closest('.cbt-magnifier-btn');
+    if (zoomBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const img = zoomBtn.parentElement?.querySelector('img');
+      if (img?.src) {
+        openImageZoom(img.currentSrc || img.src);
+      }
+      return;
+    }
+    if (target.tagName.toLowerCase() === 'img') {
+      const img = target as HTMLImageElement;
+      if (img.src) {
+        e.preventDefault();
+        e.stopPropagation();
+        openImageZoom(img.currentSrc || img.src);
+      }
+    }
+  };
 
   const checkScrollPosition = () => {
     const el = questionScrollRef.current;
@@ -861,7 +973,8 @@ export default function UjianPage() {
 
   // Global styles for rich text
   const richTextGlobalStyles = `
-    .prose img { max-width: 100%; border-radius: 8px; }
+    .prose img { max-width: 100%; border-radius: 8px; cursor: zoom-in; transition: transform 0.2s, filter 0.2s; }
+    .prose img:hover { filter: brightness(0.96); }
     .prose p { margin-top: 0; margin-bottom: 1em; }
     .prose p:last-child { margin-bottom: 0; }
   `;
@@ -972,6 +1085,7 @@ export default function UjianPage() {
           <div 
             ref={questionScrollRef}
             onScroll={checkScrollPosition}
+            onClick={handleQuestionContainerClick}
             className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar"
           >
             <div 
@@ -1607,6 +1721,162 @@ export default function UjianPage() {
                 Tutup Pembahasan
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL ZOOM / PERBESAR GAMBAR SOAL (LIGHTBOX) */}
+      {/* ========================================================================= */}
+      {zoomImageSrc && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-between p-2 sm:p-4 select-none animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeImageZoom();
+            }
+          }}
+        >
+          {/* Top Control Bar */}
+          <div className="w-full max-w-4xl bg-slate-900/90 border border-slate-700/80 rounded-2xl px-4 py-2.5 text-white flex items-center justify-between shadow-2xl backdrop-blur-md flex-shrink-0 z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-xl shadow-md">
+                <ZoomIn size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold tracking-wide">Pratinjau Gambar Soal</h3>
+                <p className="text-[11px] text-slate-400 hidden sm:block">Perbesar gambar untuk melihat detail soal & grafik</p>
+              </div>
+            </div>
+
+            {/* Control Buttons */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Zoom Out */}
+              <button
+                type="button"
+                onClick={() => setZoomScale(prev => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors active:scale-95"
+                title="Perkecil (-)"
+              >
+                <ZoomOut size={18} />
+              </button>
+
+              {/* Scale Badge */}
+              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-blue-400 min-w-[56px] text-center">
+                {Math.round(zoomScale * 100)}%
+              </span>
+
+              {/* Zoom In */}
+              <button
+                type="button"
+                onClick={() => setZoomScale(prev => Math.min(4, Number((prev + 0.25).toFixed(2))))}
+                className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors active:scale-95"
+                title="Perbesar (+)"
+              >
+                <ZoomIn size={18} />
+              </button>
+
+              {/* Reset */}
+              <button
+                type="button"
+                onClick={() => { setZoomScale(1); setZoomPosition({ x: 0, y: 0 }); }}
+                className="px-2.5 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors text-xs font-medium flex items-center gap-1 active:scale-95"
+                title="Reset Ukuran (100%)"
+              >
+                <RotateCcw size={15} />
+                <span className="hidden md:inline text-[11px]">Reset</span>
+              </button>
+
+              <div className="h-5 w-[1px] bg-slate-700 mx-1" />
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={closeImageZoom}
+                className="px-3 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                title="Tutup (ESC)"
+              >
+                <X size={16} />
+                <span>Tutup</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Canvas / Image Display Area */}
+          <div 
+            className="flex-1 w-full max-w-5xl flex items-center justify-center overflow-hidden my-2 sm:my-3 relative cursor-grab active:cursor-grabbing touch-none"
+            onWheel={(e) => {
+              e.preventDefault();
+              if (e.deltaY < 0) {
+                setZoomScale(prev => Math.min(4, Number((prev + 0.2).toFixed(2))));
+              } else {
+                setZoomScale(prev => Math.max(0.5, Number((prev - 0.2).toFixed(2))));
+              }
+            }}
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
+              setIsDraggingZoom(true);
+              dragStartRef.current = {
+                startX: e.clientX,
+                startY: e.clientY,
+                posX: zoomPosition.x,
+                posY: zoomPosition.y
+              };
+            }}
+            onMouseMove={(e) => {
+              if (!isDraggingZoom) return;
+              const dx = e.clientX - dragStartRef.current.startX;
+              const dy = e.clientY - dragStartRef.current.startY;
+              setZoomPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy
+              });
+            }}
+            onMouseUp={() => setIsDraggingZoom(false)}
+            onMouseLeave={() => setIsDraggingZoom(false)}
+            onTouchStart={(e) => {
+              if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                setIsDraggingZoom(true);
+                dragStartRef.current = {
+                  startX: touch.clientX,
+                  startY: touch.clientY,
+                  posX: zoomPosition.x,
+                  posY: zoomPosition.y
+                };
+              }
+            }}
+            onTouchMove={(e) => {
+              if (!isDraggingZoom || e.touches.length !== 1) return;
+              const touch = e.touches[0];
+              const dx = touch.clientX - dragStartRef.current.startX;
+              const dy = touch.clientY - dragStartRef.current.startY;
+              setZoomPosition({
+                x: dragStartRef.current.posX + dx,
+                y: dragStartRef.current.posY + dy
+              });
+            }}
+            onTouchEnd={() => setIsDraggingZoom(false)}
+          >
+            <div 
+              className="transition-transform duration-75 select-none max-h-full max-w-full flex items-center justify-center"
+              style={{
+                transform: `translate3d(${zoomPosition.x}px, ${zoomPosition.y}px, 0px) scale(${zoomScale})`,
+                transformOrigin: 'center center'
+              }}
+            >
+              <img
+                src={zoomImageSrc}
+                alt="Gambar Soal Ujian"
+                className="max-h-[72vh] max-w-[88vw] object-contain rounded-2xl shadow-2xl pointer-events-none select-none bg-white/5 border border-white/10 ring-1 ring-white/10"
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Hint Banner */}
+          <div className="bg-slate-900/85 border border-slate-700/60 rounded-full px-4 py-1.5 text-slate-300 text-[11px] sm:text-xs flex items-center gap-2 shadow-lg backdrop-blur-md text-center">
+            <span>💡 <b>Geser mouse / sentuh layar</b> untuk menggeser gambar • <b>Scroll roda mouse</b> atau tombol <b>(+ / -)</b> untuk zoom • Tekan <b>ESC</b> atau tombol <b>Tutup</b> untuk keluar</span>
           </div>
         </div>
       )}
