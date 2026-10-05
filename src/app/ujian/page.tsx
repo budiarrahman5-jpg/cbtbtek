@@ -492,6 +492,24 @@ export default function UjianPage() {
         localStorage.setItem(jwbKey, JSON.stringify(u.jawaban_sementara));
       } catch (e) {}
     }
+
+    // Ambil jawaban sementara terbaru dari database server jika ada
+    supabase
+      .from('users')
+      .select('jawaban_sementara, sisa_waktu')
+      .eq('id', u.id)
+      .maybeSingle()
+      .then(({ data: dbUser }) => {
+        if (dbUser?.jawaban_sementara && Object.keys(dbUser.jawaban_sementara).length > 0) {
+          setJawaban(prev => {
+            const merged = { ...dbUser.jawaban_sementara, ...prev };
+            try {
+              localStorage.setItem(jwbKey, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
+      });
     
     const rguKey = `cbt_ragu_${u.id}_${p.id}`;
     const savedRgu = localStorage.getItem(rguKey);
@@ -654,45 +672,68 @@ export default function UjianPage() {
     return () => clearInterval(interval);
   }, [user, paket, isReviewOpen]);
 
-  // Sinkronisasi otomatis jawaban sementara & sisa waktu ke Supabase (Debounced 1.5 detik)
+  const jawabanRef = useRef<Record<string, any>>(jawaban);
+  const sisaWaktuRef = useRef<number>(sisaWaktu);
+
+  useEffect(() => {
+    jawabanRef.current = jawaban;
+  }, [jawaban]);
+
+  useEffect(() => {
+    sisaWaktuRef.current = sisaWaktu;
+  }, [sisaWaktu]);
+
+  const syncJawabanKeServer = async (latestJawaban: Record<string, any>) => {
+    if (!user || !paket || Object.keys(latestJawaban).length === 0) return;
+    try {
+      await supabase
+        .from('users')
+        .update({
+          jawaban_sementara: latestJawaban,
+          sisa_waktu: sisaWaktuRef.current,
+          paket_aktif_id: paket.id
+        })
+        .eq('id', user.id);
+    } catch (err) {
+      console.error('Gagal sinkron jawaban sementara:', err);
+    }
+  };
+
+  // Sinkronisasi otomatis jawaban sementara ke Supabase saat ada perubahan jawaban (Debounced 1 detik)
   useEffect(() => {
     if (!user || !paket || Object.keys(jawaban).length === 0) return;
 
-    const timer = setTimeout(async () => {
-      try {
-        await supabase
-          .from('users')
-          .update({
-            jawaban_sementara: jawaban,
-            sisa_waktu: sisaWaktu,
-            paket_aktif_id: paket.id
-          })
-          .eq('id', user.id);
-      } catch (err) {
-        console.error('Gagal sinkron jawaban sementara:', err);
-      }
-    }, 1500);
+    const timer = setTimeout(() => {
+      syncJawabanKeServer(jawaban);
+    }, 1000);
 
     return () => clearTimeout(timer);
-  }, [jawaban, user, paket, sisaWaktu]);
+  }, [jawaban, user, paket]);
 
-  // Sinkronisasi berkala sisa waktu & jawaban setiap 20 detik
+  // Langsung sinkron ke server saat berpindah nomor soal
+  useEffect(() => {
+    if (!user || !paket || Object.keys(jawabanRef.current).length === 0) return;
+    syncJawabanKeServer(jawabanRef.current);
+  }, [indexSoal]);
+
+  // Sinkronisasi berkala sisa waktu & jawaban setiap 15 detik (tidak terganggu oleh detik sisa waktu)
   useEffect(() => {
     if (!user || !paket) return;
-    const interval = setInterval(async () => {
-      try {
-        await supabase
-          .from('users')
-          .update({
-            jawaban_sementara: jawaban,
-            sisa_waktu: sisaWaktu,
-            paket_aktif_id: paket.id
-          })
-          .eq('id', user.id);
-      } catch (e) {}
-    }, 20000);
+    const interval = setInterval(() => {
+      syncJawabanKeServer(jawabanRef.current);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [user, paket, jawaban, sisaWaktu]);
+  }, [user, paket]);
+
+  // Sinkronisasi saat user menutup tab/browser atau reload
+  useEffect(() => {
+    if (!user || !paket) return;
+    const handleBeforeUnload = () => {
+      syncJawabanKeServer(jawabanRef.current);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [user, paket]);
 
   const handleChangeFontSize = (size: 'sm' | 'base' | 'lg') => {
     setFontSize(size);
@@ -880,6 +921,7 @@ export default function UjianPage() {
     setJawaban(prev => {
       const next = { ...prev, [idSoal]: answer };
       localStorage.setItem(`cbt_jawaban_${user.id}_${paket.id}`, JSON.stringify(next));
+      jawabanRef.current = next;
       return next;
     });
   };

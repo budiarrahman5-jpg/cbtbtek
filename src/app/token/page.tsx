@@ -144,13 +144,20 @@ export default function TokenPage() {
         return;
       }
 
+      const isResuming = user.paket_aktif_id === selectedPaket && user.status_ujian === 'Mengerjakan Ujian';
+      const userUpdate: any = { 
+        status_ujian: 'Mengerjakan Ujian', 
+        status_login: '1',
+        paket_aktif_id: selectedPaket
+      };
+      if (!isResuming) {
+        userUpdate.sisa_waktu = paket.durasi_menit * 60;
+        userUpdate.jawaban_sementara = {};
+      }
+
       const { error: updateError } = await supabase
         .from('users')
-        .update({ 
-          status_ujian: 'Mengerjakan Ujian', 
-          paket_aktif_id: selectedPaket,
-          sisa_waktu: paket.durasi_menit * 60
-        })
+        .update(userUpdate)
         .eq('id', user.id);
 
       if (updateError) throw updateError;
