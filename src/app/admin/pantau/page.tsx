@@ -9,6 +9,7 @@ import clsx from 'clsx';
 export default function PantauSiswaPage() {
   const [siswa, setSiswa] = useState<any[]>([]);
   const [paketList, setPaketList] = useState<any[]>([]);
+  const [hasilUserIds, setHasilUserIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -65,11 +66,41 @@ export default function PantauSiswaPage() {
         .select('id, nama_paket, durasi_menit, status')
         .order('created_at', { ascending: false });
       if (pData) setPaketList(pData);
+
+      const { data: hData } = await supabase
+        .from('hasil')
+        .select('user_id');
+      if (hData) {
+        setHasilUserIds(new Set(hData.map((h: any) => h.user_id)));
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
       setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
+  const handleResetMassalSiswaTanpaHasil = async () => {
+    const targetSiswa = siswa.filter(s => s.status_ujian === 'Selesai' && !hasilUserIds.has(s.id));
+    if (targetSiswa.length === 0) return;
+
+    if (!confirm(`Terdapat ${targetSiswa.length} siswa berstatus 'Selesai' tetapi hasil ujiannya tidak ada di database. Yakin ingin mereset status ujian mereka ke 'Belum Ujian' agar siswa dapat mengikuti ujian kembali?`)) {
+      return;
+    }
+
+    try {
+      const ids = targetSiswa.map(s => s.id);
+      const { error } = await supabase
+        .from('users')
+        .update({ status_ujian: 'Belum Ujian', status_login: '0' })
+        .in('id', ids);
+
+      if (error) throw error;
+      alert(`Berhasil mereset ${ids.length} siswa! Status mereka kini kembali menjadi 'Belum Ujian' dan dapat mengikuti ujian lagi.`);
+      fetchData(false);
+    } catch (err: any) {
+      alert('Gagal mereset siswa: ' + err.message);
     }
   };
 
@@ -294,6 +325,8 @@ export default function PantauSiswaPage() {
     belumMulai: siswa.filter(s => s.status_ujian !== 'Selesai' && s.status_login !== '1').length,
   };
 
+  const siswaTanpaHasil = siswa.filter(s => s.status_ujian === 'Selesai' && !hasilUserIds.has(s.id));
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
@@ -344,6 +377,31 @@ export default function PantauSiswaPage() {
           </div>
         </div>
       </div>
+
+      {/* Banner Peringatan Siswa Selesai Tanpa Hasil */}
+      {siswaTanpaHasil.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-amber-900 shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0 shadow-md shadow-amber-500/20">
+              <AlertTriangle size={22} />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm md:text-base text-amber-950">
+                Perhatian: Ditemukan {siswaTanpaHasil.length} Siswa Berstatus Selesai Namun Hasil Belum Masuk Rekap
+              </div>
+              <div className="text-xs text-amber-800 font-medium mt-0.5">
+                Siswa-siswa ini menyelesaikan ujian saat terjadi kendala penyimpanan database. Anda dapat mereset sesi mereka agar dapat mengikuti ujian kembali.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleResetMassalSiswaTanpaHasil}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md shadow-amber-600/20 transition active:scale-95 shrink-0 flex items-center gap-2"
+          >
+            <RefreshCw size={15} /> Reset Status ke 'Belum Ujian' ({siswaTanpaHasil.length} Siswa)
+          </button>
+        </div>
+      )}
 
       {/* Tabel Pemantauan */}
       <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden flex flex-col min-h-[500px]">
@@ -405,10 +463,17 @@ export default function PantauSiswaPage() {
                       </td>
                       <td className="p-4">
                         {isSelesai ? (
-                          <div className="flex flex-col">
-                            <span className="font-black text-blue-600 flex items-center gap-1"><CheckCircle2 size={16}/> Selesai</span>
-                            <span className="text-xs font-medium text-slate-400 mt-0.5">Sudah submit hasil</span>
-                          </div>
+                          hasilUserIds.has(s.id) ? (
+                            <div className="flex flex-col">
+                              <span className="font-black text-blue-600 flex items-center gap-1"><CheckCircle2 size={16}/> Selesai</span>
+                              <span className="text-xs font-medium text-slate-400 mt-0.5">Sudah submit hasil</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-amber-600 flex items-center gap-1"><AlertTriangle size={15}/> Selesai (Tanpa Rekap)</span>
+                              <span className="text-[11px] font-medium text-amber-600 mt-0.5">Hasil belum tersimpan</span>
+                            </div>
+                          )
                         ) : isOnline || s.status_ujian === 'Mengerjakan Ujian' ? (
                           <div className="flex flex-col gap-1">
                             <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-xs">

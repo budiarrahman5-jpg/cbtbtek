@@ -1000,19 +1000,46 @@ export default function UjianPage() {
     const sPakai = waktuDigunakan % 60;
     const formatWaktuPakai = `${mPakai} menit ${sPakai} detik`;
 
-    // Status koreksi awal saat siswa selesai ujian adalah 'Belum' (belum dikoreksi)
-    const statusKoreksiAwal = 'Belum';
+    // Cek apakah paket ini mengandung soal yang butuh koreksi manual (Essay atau Isian tanpa kunci otomatis)
+    const butuhKoreksiManual = soalList.some((s: any) => s.tipe === 'Essay' || (s.tipe === 'Isian' && !s.kunci));
+    const statusKoreksiAwal = butuhKoreksiManual ? 'Menunggu Koreksi' : 'Selesai';
 
     try {
-      await supabase.from('hasil').insert({
-        user_id: user.id,
-        paket_id: paket.id,
-        waktu_sisa: sisaWaktu,
-        detail_jawaban: jawaban,
-        status_koreksi: statusKoreksiAwal,
-        skor_akhir: skorAkhir,
-        cheat_count: cheatCount
-      });
+      // Cek apakah sudah ada data hasil sebelumnya untuk user & paket ini
+      const { data: cekHasil } = await supabase
+        .from('hasil')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('paket_id', paket.id)
+        .maybeSingle();
+
+      let errHasil = null;
+      if (cekHasil) {
+        const { error } = await supabase.from('hasil').update({
+          waktu_sisa: sisaWaktu,
+          detail_jawaban: jawaban,
+          status_koreksi: statusKoreksiAwal,
+          skor_akhir: skorAkhir,
+          cheat_count: cheatCount
+        }).eq('id', cekHasil.id);
+        errHasil = error;
+      } else {
+        const { error } = await supabase.from('hasil').insert({
+          user_id: user.id,
+          paket_id: paket.id,
+          waktu_sisa: sisaWaktu,
+          detail_jawaban: jawaban,
+          status_koreksi: statusKoreksiAwal,
+          skor_akhir: skorAkhir,
+          cheat_count: cheatCount
+        });
+        errHasil = error;
+      }
+
+      if (errHasil) {
+        console.error('Error simpan hasil ujian:', errHasil);
+        throw errHasil;
+      }
 
       await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0' }).eq('id', user.id);
       
@@ -1036,9 +1063,9 @@ export default function UjianPage() {
         }
       } catch (e) {}
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Terjadi kesalahan saat menyimpan ujian. Pastikan koneksi internet stabil.');
+      alert('Terjadi kesalahan saat menyimpan ujian: ' + (err?.message || 'Pastikan koneksi internet stabil.'));
     } finally {
       setIsSubmitting(false);
     }

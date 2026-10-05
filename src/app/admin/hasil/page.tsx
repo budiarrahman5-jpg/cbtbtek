@@ -477,7 +477,7 @@ export default function HasilUjianPage() {
     }
   };
 
-  const handleBulkUpdateStatus = async (newStatus: 'Selesai' | 'Belum') => {
+  const handleBulkUpdateStatus = async (newStatus: 'Selesai' | 'Menunggu Koreksi') => {
     if (selectedHasilIds.length === 0) return;
     setIsUpdatingStatus(true);
     try {
@@ -500,7 +500,7 @@ export default function HasilUjianPage() {
   };
 
   const handleSingleToggleStatus = async (id: string, currentStatus: string) => {
-    const nextStatus = currentStatus === 'Selesai' ? 'Belum' : 'Selesai';
+    const nextStatus = currentStatus === 'Selesai' ? 'Menunggu Koreksi' : 'Selesai';
     try {
       const { error } = await supabase
         .from('hasil')
@@ -963,11 +963,11 @@ export default function HasilUjianPage() {
                 <CheckCircle2 size={16} /> Tandai Selesai
               </button>
               <button
-                onClick={() => handleBulkUpdateStatus('Belum')}
+                onClick={() => handleBulkUpdateStatus('Menunggu Koreksi')}
                 disabled={isUpdatingStatus}
                 className="bg-amber-600 hover:bg-amber-700 text-white text-xs md:text-sm font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition active:scale-95 disabled:opacity-50"
               >
-                <Clock size={16} /> Tandai Belum
+                <Clock size={16} /> Tandai Menunggu Koreksi
               </button>
               <button
                 onClick={handleToggleSelectAll}
