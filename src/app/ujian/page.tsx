@@ -206,7 +206,7 @@ const JodohkanInteractive = ({
 
   const proseClass = clsx(
     cardFontClass,
-    "prose prose-slate max-w-none break-words leading-snug sm:leading-relaxed select-text",
+    "prose prose-slate max-w-none break-normal leading-snug sm:leading-relaxed select-text",
     "[&_img]:max-h-16 sm:[&_img]:max-h-24 md:[&_img]:max-h-32 [&_img]:w-auto [&_img]:mx-auto [&_img]:object-contain [&_img]:rounded-md [&_img]:shadow-sm",
     "[&_p]:m-0 [&_p+p]:mt-1"
   );
@@ -1492,6 +1492,11 @@ export default function UjianPage() {
     .prose img:hover { filter: brightness(0.96); }
     .prose p { margin-top: 0; margin-bottom: 1em; }
     .prose p:last-child { margin-bottom: 0; }
+    .prose, .prose * {
+      word-break: normal;
+      overflow-wrap: anywhere;
+      hyphens: none;
+    }
   `;
 
   const fontQuestionClass = fontSize === 'sm' 
@@ -1604,7 +1609,7 @@ export default function UjianPage() {
             className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth custom-scrollbar"
           >
             <div 
-              className={`${fontQuestionClass} text-slate-800 font-medium prose prose-slate max-w-none break-words leading-relaxed prose-p:my-2`}
+              className={`${fontQuestionClass} text-slate-800 font-medium prose prose-slate max-w-none break-normal leading-relaxed prose-p:my-2`}
               dangerouslySetInnerHTML={{ __html: soalAktif.pertanyaan }} 
             />
             
@@ -1667,7 +1672,7 @@ export default function UjianPage() {
                           dangerouslySetInnerHTML={{ __html: soalAktif[key] }} 
                           className={clsx(
                             fontOptionClass,
-                            "flex-1 prose prose-slate max-w-none break-words min-w-0 leading-relaxed",
+                            "flex-1 prose prose-slate max-w-none break-normal min-w-0 leading-relaxed",
                             isSelected ? "text-indigo-900 font-bold" : "text-slate-700"
                           )} 
                         />
