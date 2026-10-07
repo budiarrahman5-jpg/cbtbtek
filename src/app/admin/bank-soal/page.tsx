@@ -220,10 +220,10 @@ export default function BankSoalPage() {
                                 const p = pData.find((x:any) => x.id === k.premisId);
                                 const r = rData.find((x:any) => x.id === k.responsId);
                                 return (
-                                  <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2 rounded shadow-sm border border-blue-100 text-sm">
-                                    <div className="flex-1 p-2 bg-slate-50 rounded" dangerouslySetInnerHTML={{__html: p?.text || '?'}} />
-                                    <span className="hidden md:inline font-bold text-blue-400">{'->'}</span>
-                                    <div className="flex-1 p-2 bg-slate-50 rounded" dangerouslySetInnerHTML={{__html: r?.text || '?'}} />
+                                  <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2.5 rounded-lg shadow-xs border border-blue-200 text-sm">
+                                    <div className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-950 font-bold [&_*]:text-slate-950" dangerouslySetInnerHTML={{__html: p?.text || '?'}} />
+                                    <span className="hidden md:inline font-black text-blue-600">{'->'}</span>
+                                    <div className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-950 font-bold [&_*]:text-slate-950" dangerouslySetInnerHTML={{__html: r?.text || '?'}} />
                                   </div>
                                 );
                               });
@@ -231,10 +231,10 @@ export default function BankSoalPage() {
                               let pData = String(soal.opsi_a || '').split('|');
                               let rData = String(soal.opsi_b || '').split('|');
                               return pData.map((p, idx) => (
-                                <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2 rounded shadow-sm border border-blue-100 text-sm">
-                                  <div className="flex-1 p-2 bg-slate-50 rounded">{p.trim()}</div>
-                                  <span className="hidden md:inline font-bold text-blue-400">{'->'}</span>
-                                  <div className="flex-1 p-2 bg-slate-50 rounded">{rData[idx]?.trim() || '?'}</div>
+                                <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2 bg-white p-2.5 rounded-lg shadow-xs border border-blue-200 text-sm">
+                                  <div className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-950 font-bold">{p.trim()}</div>
+                                  <span className="hidden md:inline font-black text-blue-600">{'->'}</span>
+                                  <div className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-950 font-bold">{rData[idx]?.trim() || '?'}</div>
                                 </div>
                               ));
                             }

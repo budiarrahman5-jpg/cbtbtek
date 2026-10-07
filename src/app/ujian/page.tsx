@@ -206,7 +206,9 @@ const JodohkanInteractive = ({
 
   const proseClass = clsx(
     cardFontClass,
-    "prose prose-slate max-w-none break-normal leading-snug sm:leading-relaxed select-text",
+    "jodohkan-text max-w-none break-normal leading-snug sm:leading-relaxed select-text",
+    "text-slate-950 font-bold",
+    "[&_*]:text-slate-950 [&_p]:text-slate-950 [&_span]:text-slate-950 [&_strong]:text-slate-950 [&_div]:text-slate-950",
     "[&_img]:max-h-16 sm:[&_img]:max-h-24 md:[&_img]:max-h-32 [&_img]:w-auto [&_img]:mx-auto [&_img]:object-contain [&_img]:rounded-md [&_img]:shadow-sm",
     "[&_p]:m-0 [&_p+p]:mt-1"
   );
@@ -333,11 +335,11 @@ const JodohkanInteractive = ({
           <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-16 items-start relative z-20">
             {/* Kolom Kiri: Premis */}
             <div className="flex flex-col gap-2.5 sm:gap-3.5">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                <span className="font-extrabold text-slate-500 text-[10px] sm:text-xs tracking-wider uppercase flex items-center gap-1">
-                  <Link2 size={13} className="text-indigo-600" /> PREMIS
+              <div className="flex items-center justify-between pb-1.5 border-b border-indigo-200">
+                <span className="font-black text-indigo-950 text-xs sm:text-sm tracking-wider uppercase flex items-center gap-1.5">
+                  <Link2 size={14} className="text-indigo-600" /> PREMIS (KIRI)
                 </span>
-                <span className="text-[10px] text-slate-400 font-bold">{premis.length} Butir</span>
+                <span className="text-xs text-indigo-900 font-black bg-indigo-100/80 border border-indigo-300 px-2 py-0.5 rounded-md">{premis.length} Butir</span>
               </div>
 
               {premis.map((p, idx) => {
@@ -356,17 +358,17 @@ const JodohkanInteractive = ({
                       }
                     }}
                     className={clsx(
-                      "relative p-2.5 sm:p-3.5 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
+                      "jodohkan-card relative p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
                       isSelected
-                        ? "border-indigo-500 ring-2 ring-indigo-400 bg-indigo-50/70 shadow-md shadow-indigo-100"
+                        ? "border-indigo-600 ring-2 ring-indigo-500 bg-indigo-50/90 shadow-md shadow-indigo-100"
                         : isPaired
                           ? `${palette.cardActive} shadow-xs`
-                          : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50/60 shadow-xs"
+                          : "bg-white border-slate-300 hover:border-indigo-400 hover:bg-slate-50/80 shadow-xs"
                     )}
                   >
                     {/* Header Item: Nomor Urut & Badge Pasangan */}
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-[10px] sm:text-xs font-black text-slate-400 flex items-center gap-1">
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="text-xs font-black text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 flex items-center gap-1">
                         #{idx + 1}
                       </span>
                       {palette && (
@@ -376,7 +378,7 @@ const JodohkanInteractive = ({
                             removeConnection(p.id);
                           }}
                           className={clsx(
-                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
                             palette.badge
                           )}
                           title="Klik untuk memutuskan hubungan"
@@ -390,7 +392,7 @@ const JodohkanInteractive = ({
                     {/* Konten Soal */}
                     <div 
                       dangerouslySetInnerHTML={{ __html: p.text }} 
-                      className={clsx(proseClass, "flex-1 mr-2 sm:mr-3")} 
+                      className={clsx(proseClass, "flex-1 mr-2 sm:mr-3 text-slate-950 font-bold")} 
                     />
 
                     {/* Titik Koneksi Kanan (Drag Dot) */}
@@ -414,9 +416,9 @@ const JodohkanInteractive = ({
 
             {/* Kolom Kanan: Respons */}
             <div className="flex flex-col gap-2.5 sm:gap-3.5">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                <span className="font-extrabold text-slate-500 text-[10px] sm:text-xs tracking-wider uppercase text-right w-full">
-                  RESPONS
+              <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200">
+                <span className="font-black text-emerald-950 text-xs sm:text-sm tracking-wider uppercase text-right w-full">
+                  RESPONS (KANAN)
                 </span>
               </div>
 
@@ -438,16 +440,16 @@ const JodohkanInteractive = ({
                       }
                     }}
                     className={clsx(
-                      "relative p-2.5 sm:p-3.5 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
+                      "jodohkan-card relative p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer group flex flex-col justify-between min-h-[64px] sm:min-h-[76px]",
                       selectedPremisId
-                        ? "border-dashed border-indigo-400 bg-indigo-50/30 hover:border-indigo-600 hover:bg-indigo-100/60 ring-1 ring-indigo-200 shadow-xs"
+                        ? "border-dashed border-indigo-500 bg-indigo-50/40 hover:border-indigo-600 hover:bg-indigo-100/70 ring-1 ring-indigo-300 shadow-xs"
                         : isPaired
                           ? `${palette.cardActive} shadow-xs`
-                          : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50/60 shadow-xs"
+                          : "bg-white border-slate-300 hover:border-indigo-400 hover:bg-slate-50/80 shadow-xs"
                     )}
                   >
                     {/* Header Item Respons: Badge Pasangan & Nomor */}
-                    <div className="flex items-center justify-between gap-1 mb-1">
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
                       {palette ? (
                         <span 
                           onClick={(e) => {
@@ -456,7 +458,7 @@ const JodohkanInteractive = ({
                             if (match) removeConnection(match.premisId, r.id);
                           }}
                           className={clsx(
-                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border transition hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300",
                             palette.badge
                           )}
                           title="Klik untuk memutuskan hubungan"
@@ -465,7 +467,7 @@ const JodohkanInteractive = ({
                           <X size={10} />
                         </span>
                       ) : <span />}
-                      <span className="text-[10px] sm:text-xs font-black text-slate-400">
+                      <span className="text-xs font-black text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                         {String.fromCharCode(65 + idx)}
                       </span>
                     </div>
@@ -486,7 +488,7 @@ const JodohkanInteractive = ({
                     {/* Konten Teks Respons */}
                     <div 
                       dangerouslySetInnerHTML={{ __html: r.text }} 
-                      className={clsx(proseClass, "flex-1 ml-2 sm:ml-3")} 
+                      className={clsx(proseClass, "flex-1 ml-2 sm:ml-3 text-slate-950 font-bold")} 
                     />
                   </div>
                 );
@@ -499,7 +501,7 @@ const JodohkanInteractive = ({
       {/* MODE 2: DAFTAR PILIHAN (Dropdown Mode - Sangat Nyaman di HP Layar Sempit) */}
       {viewMode === 'pilihan' && (
         <div className="space-y-3 p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-200">
-          <p className="text-xs text-slate-500 font-medium pb-2 border-b border-slate-200">
+          <p className="text-xs text-slate-700 font-bold pb-2 border-b border-slate-200">
             Pilih pasangan respons yang sesuai untuk setiap butir premis di bawah ini:
           </p>
 
@@ -512,20 +514,20 @@ const JodohkanInteractive = ({
                 <div 
                   key={p.id}
                   className={clsx(
-                    "p-3 rounded-xl border bg-white shadow-xs transition space-y-2",
-                    palette ? palette.cardActive : "border-slate-200"
+                    "jodohkan-card p-3.5 rounded-xl border-2 bg-white shadow-xs transition space-y-2.5",
+                    palette ? palette.cardActive : "border-slate-300"
                   )}
                 >
-                  <div className="flex items-start gap-2">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-black text-xs flex items-center justify-center">
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
                       {idx + 1}
                     </span>
-                    <div dangerouslySetInnerHTML={{ __html: p.text }} className={clsx(proseClass, "flex-1")} />
+                    <div dangerouslySetInnerHTML={{ __html: p.text }} className={clsx(proseClass, "flex-1 text-slate-950 font-bold")} />
                   </div>
 
                   {/* Dropdown Pemilihan Respons */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-500 whitespace-nowrap">
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <span className="text-xs font-black text-slate-900 whitespace-nowrap">
                       Pasangan:
                     </span>
                     <select
@@ -538,13 +540,13 @@ const JodohkanInteractive = ({
                           connectPair(p.id, val);
                         }
                       }}
-                      className="flex-1 py-1.5 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                      className="flex-1 py-1.5 px-3 rounded-lg border-2 border-slate-300 bg-white text-slate-950 text-xs sm:text-sm font-bold focus:outline-none focus:border-indigo-600 transition"
                     >
-                      <option value="">-- Belum Dipasangkan --</option>
+                      <option value="" className="text-slate-500 font-normal">-- Belum Dipasangkan --</option>
                       {respons.map((r, rIdx) => {
                         const plainText = r.text.replace(/<[^>]*>?/gm, '').trim();
                         return (
-                          <option key={r.id} value={r.id}>
+                          <option key={r.id} value={r.id} className="text-slate-950 font-bold">
                             ({String.fromCharCode(65 + rIdx)}) {plainText.slice(0, 45)}{plainText.length > 45 ? '...' : ''}
                           </option>
                         );
@@ -1496,6 +1498,24 @@ export default function UjianPage() {
       word-break: normal;
       overflow-wrap: anywhere;
       hyphens: none;
+    }
+    /* Pastikan seluruh teks di kartu soal menjodohkan selalu hitam pekat & berbobot jelas */
+    .jodohkan-card,
+    .jodohkan-card *,
+    .jodohkan-text,
+    .jodohkan-text * {
+      color: #0f172a !important;
+      font-weight: 600 !important;
+    }
+    .jodohkan-card p,
+    .jodohkan-text p {
+      margin: 0 !important;
+      color: #0f172a !important;
+    }
+    .jodohkan-text span,
+    .jodohkan-text strong,
+    .jodohkan-text em {
+      color: #0f172a !important;
     }
   `;
 
