@@ -908,11 +908,37 @@ export default function UjianPage() {
     
     const { data } = await supabase.from('paket_soal').select('soal(*)').eq('paket_id', paketId);
     if (data) {
-      let soalArr = data.map((r: any) => r.soal);
+      let soalArr = data.map((r: any) => r.soal).filter(Boolean);
       if (isAcak) {
         soalArr = soalArr.sort(() => Math.random() - 0.5);
       }
       setSoalList(soalArr);
+
+      // Purge jawaban dari ID soal yang bukan milik paket ujian ini
+      const paketSoalIdSet = new Set(soalArr.map((s: any) => s.id));
+      setJawaban(prev => {
+        const cleaned: Record<string, any> = {};
+        let hasForeign = false;
+        Object.keys(prev).forEach(k => {
+          if (paketSoalIdSet.has(k)) {
+            cleaned[k] = prev[k];
+          } else {
+            hasForeign = true;
+          }
+        });
+        if (hasForeign) {
+          const uStr = localStorage.getItem('cbt_user');
+          if (uStr) {
+            try {
+              const curU = JSON.parse(uStr);
+              const jKey = `cbt_jawaban_${curU.id}_${paketId}`;
+              localStorage.setItem(jKey, JSON.stringify(cleaned));
+              supabase.from('users').update({ jawaban_sementara: cleaned, paket_aktif_id: paketId }).eq('id', curU.id);
+            } catch (e) {}
+          }
+        }
+        return hasForeign ? cleaned : prev;
+      });
     }
   };
 
@@ -1446,7 +1472,7 @@ export default function UjianPage() {
         throw errHasil;
       }
 
-      await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0' }).eq('id', user.id);
+      await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0', jawaban_sementara: {} }).eq('id', user.id);
       
       localStorage.removeItem('cbt_paket');
       localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);

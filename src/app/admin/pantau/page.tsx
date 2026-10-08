@@ -9,6 +9,7 @@ import clsx from 'clsx';
 export default function PantauSiswaPage() {
   const [siswa, setSiswa] = useState<any[]>([]);
   const [paketList, setPaketList] = useState<any[]>([]);
+  const [soalPerPaket, setSoalPerPaket] = useState<Record<string, Set<string>>>({});
   const [hasilUserIds, setHasilUserIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,6 +68,20 @@ export default function PantauSiswaPage() {
         .order('created_at', { ascending: false });
       if (pData) setPaketList(pData);
 
+      const { data: psData } = await supabase
+        .from('paket_soal')
+        .select('paket_id, soal_id');
+      if (psData) {
+        const pMap: Record<string, Set<string>> = {};
+        psData.forEach((ps: any) => {
+          if (!pMap[ps.paket_id]) {
+            pMap[ps.paket_id] = new Set();
+          }
+          pMap[ps.paket_id].add(ps.soal_id);
+        });
+        setSoalPerPaket(pMap);
+      }
+
       const { data: hData } = await supabase
         .from('hasil')
         .select('user_id');
@@ -93,7 +108,7 @@ export default function PantauSiswaPage() {
       const ids = targetSiswa.map(s => s.id);
       const { error } = await supabase
         .from('users')
-        .update({ status_ujian: 'Belum Ujian', status_login: '0' })
+        .update({ status_ujian: 'Belum Ujian', status_login: '0', jawaban_sementara: {} })
         .in('id', ids);
 
       if (error) throw error;
@@ -231,7 +246,8 @@ export default function PantauSiswaPage() {
         .from('users')
         .update({
           status_ujian: 'Selesai',
-          status_login: '0'
+          status_login: '0',
+          jawaban_sementara: {}
         })
         .eq('id', s.id);
       if (errUser) throw errUser;
@@ -475,23 +491,76 @@ export default function PantauSiswaPage() {
                             </div>
                           )
                         ) : isOnline || s.status_ujian === 'Mengerjakan Ujian' ? (
-                          <div className="flex flex-col gap-1">
-                            <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-xs">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                              Sedang Mengerjakan
-                            </span>
-                            {s.paket?.nama_paket && (
-                              <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded max-w-xs truncate" title={s.paket?.nama_paket}>
-                                📦 {s.paket?.nama_paket}
-                              </span>
-                            )}
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                              <span>📝 {Object.keys(s.jawaban_sementara || {}).length} soal terjawab</span>
-                              {s.sisa_waktu > 0 && (
-                                <span>• ⏱️ {Math.floor(s.sisa_waktu / 60)}m</span>
-                              )}
-                            </div>
-                          </div>
+                          (() => {
+                            const activePaketId = s.paket_aktif_id || s.paket?.id;
+                            const soalSet = activePaketId ? soalPerPaket[activePaketId] : null;
+                            const totalSoal = soalSet ? soalSet.size : 0;
+                            const rawJwb = s.jawaban_sementara || {};
+                            
+                            // Hitung hanya kunci jawaban yang valid milik paket aktif siswa saat ini
+                            const terjawabCount = soalSet && totalSoal > 0
+                              ? Object.keys(rawJwb).filter(id => soalSet.has(id)).length
+                              : Object.keys(rawJwb).length;
+                              
+                            const persen = totalSoal > 0 ? Math.round((terjawabCount / totalSoal) * 100) : 0;
+
+                            return (
+                              <div className="flex flex-col gap-1.5 min-w-[200px] max-w-[240px]">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-bold text-emerald-600 flex items-center gap-1.5 text-xs">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Sedang Mengerjakan
+                                  </span>
+                                  {totalSoal > 0 && (
+                                    <span className={clsx(
+                                      "text-[10px] font-black px-1.5 py-0.5 rounded-full border shadow-2xs",
+                                      persen === 100 
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                        : persen >= 50 
+                                          ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
+                                          : "bg-amber-50 text-amber-700 border-amber-200"
+                                    )}>
+                                      {persen}%
+                                    </span>
+                                  )}
+                                </div>
+
+                                {s.paket?.nama_paket && (
+                                  <span className="text-[11px] font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded truncate" title={s.paket?.nama_paket}>
+                                    📦 {s.paket?.nama_paket}
+                                  </span>
+                                )}
+
+                                {/* Progress Bar Visual */}
+                                {totalSoal > 0 && (
+                                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/60 shadow-inner">
+                                    <div 
+                                      className={clsx(
+                                        "h-full rounded-full transition-all duration-500",
+                                        persen === 100 
+                                          ? "bg-emerald-500" 
+                                          : persen >= 50 
+                                            ? "bg-gradient-to-r from-blue-500 to-indigo-600" 
+                                            : "bg-amber-500"
+                                      )}
+                                      style={{ width: `${Math.min(100, Math.max(0, persen))}%` }}
+                                    />
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                                  <span className="font-bold text-slate-700">
+                                    📝 {totalSoal > 0 ? `${terjawabCount} / ${totalSoal} Soal` : `${terjawabCount} Soal`}
+                                  </span>
+                                  {s.sisa_waktu > 0 ? (
+                                    <span className="text-[10px] text-slate-500 font-semibold">⏱️ {Math.floor(s.sisa_waktu / 60)}m</span>
+                                  ) : (
+                                    <span className="text-[10px] text-rose-500 font-bold">⏱️ Habis</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()
                         ) : (
                           <div className="flex flex-col gap-0.5">
                             <span className="text-slate-400 font-medium text-xs">Belum Mulai</span>
