@@ -6,6 +6,18 @@ import { filterDemoData } from '@/lib/demo-filter';
 import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle, StopCircle, Plus, Minus, Timer } from 'lucide-react';
 import clsx from 'clsx';
 
+// Koleksi Stiker & Animasi Teguran Pengawas
+const DAFTAR_STIKER = [
+  { id: 'jangan_ribut', emoji: '🤫', label: 'Jangan Ribut', sublabel: 'Harap tenang & hening', defaultMsg: 'Harap tenang dan jangan berisik atau berbicara di dalam ruang ujian!', badgeColor: 'bg-amber-100 text-amber-900 border-amber-300' },
+  { id: 'fokus_layar', emoji: '👀', label: 'Fokus Layar', sublabel: 'Jangan menoleh kanan-kiri', defaultMsg: 'Harap fokus ke layar laptop masing-masing dan jangan menoleh ke samping!', badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300' },
+  { id: 'dilarang_nyontek', emoji: '🚫', label: 'Dilarang Nyontek', sublabel: 'Kerjakan mandiri & jujur', defaultMsg: 'Dilarang bekerja sama, menyontek, atau memberi kode jawaban ke teman!', badgeColor: 'bg-rose-100 text-rose-900 border-rose-300' },
+  { id: 'buka_tab', emoji: '⚠️', label: 'Dilarang Buka Tab', sublabel: 'Hanya layar ujian', defaultMsg: 'Dilarang membuka tab browser lain atau aplikasi tambahan selama ujian!', badgeColor: 'bg-red-100 text-red-900 border-red-300' },
+  { id: 'duduk_tegak', emoji: '🪑', label: 'Duduk Tegak', sublabel: 'Posisi rapi & tertib', defaultMsg: 'Harap duduk tegak, tertib, dan pastikan wajah Anda tampak jelas di layar!', badgeColor: 'bg-sky-100 text-sky-900 border-sky-300' },
+  { id: 'waktu_habis', emoji: '⏳', label: 'Waktu Mau Habis', sublabel: 'Periksa sisa jawaban', defaultMsg: 'Waktu pengerjaan ujian segera berakhir, harap periksa kembali seluruh jawaban Anda!', badgeColor: 'bg-yellow-100 text-yellow-900 border-yellow-300' },
+  { id: 'semangat', emoji: '💪', label: 'Tetap Semangat', sublabel: 'Teliti & percaya diri', defaultMsg: 'Tetap tenang dan teliti dalam membaca soal, kalian pasti bisa mengerjakan dengan baik!', badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+  { id: 'pengumuman', emoji: '📢', label: 'Pengumuman', sublabel: 'Informasi pengawas', defaultMsg: 'Perhatian untuk seluruh peserta ujian, harap dengarkan arahan pengawas!', badgeColor: 'bg-purple-100 text-purple-900 border-purple-300' },
+];
+
 export default function PantauSiswaPage() {
   const [siswa, setSiswa] = useState<any[]>([]);
   const [paketList, setPaketList] = useState<any[]>([]);
@@ -15,11 +27,17 @@ export default function PantauSiswaPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   
-  // State Kirim Pesan Teguran / Broadcast
-  const [modalPesan, setModalPesan] = useState<{ isOpen: boolean; targetSiswa: any | null; pesan: string }>({
+  // State Kirim Pesan Teguran / Broadcast dengan Animasi Stiker
+  const [modalPesan, setModalPesan] = useState<{
+    isOpen: boolean;
+    targetSiswa: any | null;
+    pesan: string;
+    stiker?: string;
+  }>({
     isOpen: false,
     targetSiswa: null,
-    pesan: ''
+    pesan: '',
+    stiker: 'jangan_ribut'
   });
   const [isSendingPesan, setIsSendingPesan] = useState(false);
 
@@ -332,29 +350,35 @@ export default function PantauSiswaPage() {
     if (!modalPesan.pesan.trim()) return alert('Pesan teguran tidak boleh kosong!');
     setIsSendingPesan(true);
     try {
+      const payload = JSON.stringify({
+        pesan: modalPesan.pesan.trim(),
+        stiker: modalPesan.stiker || 'jangan_ribut'
+      });
+
       if (modalPesan.targetSiswa) {
-        // Kirim teguran ke siswa tertentu via log aktivitas
+        // Kirim teguran & stiker ke siswa tertentu via log aktivitas
         const { error } = await supabase.from('log').insert({
           user_id: modalPesan.targetSiswa.id,
-          aktivitas: `PESAN_PENGAWAS:::${modalPesan.pesan.trim()}`
+          aktivitas: `PESAN_PENGAWAS:::${payload}`
         });
         if (error) throw error;
-        alert(`Pesan teguran berhasil dikirim langsung ke layar ${modalPesan.targetSiswa.nama}!`);
+        alert(`Teguran & animasi stiker berhasil dikirim ke layar ${modalPesan.targetSiswa.nama}!`);
       } else {
-        // Kirim broadcast pengumuman ke seluruh peserta via pengaturan
+        // Kirim broadcast pengumuman & stiker ke seluruh peserta via pengaturan
         const { error } = await supabase.from('pengaturan').upsert({
           kunci: 'pesan_broadcast',
           nilai: JSON.stringify({
             id: Date.now(),
             pesan: modalPesan.pesan.trim(),
+            stiker: modalPesan.stiker || 'pengumuman',
             waktu: new Date().toISOString(),
             pengirim: 'Pengawas Ujian'
           })
         }, { onConflict: 'kunci' });
         if (error) throw error;
-        alert('Pesan pengumuman berhasil disiarkan ke SEMUA siswa yang sedang ujian!');
+        alert('Pengumuman dengan animasi stiker berhasil disiarkan ke SEMUA peserta ujian!');
       }
-      setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' });
+      setModalPesan({ isOpen: false, targetSiswa: null, pesan: '', stiker: 'jangan_ribut' });
     } catch (err: any) {
       console.error(err);
       alert('Gagal mengirim pesan: ' + (err.message || 'Koneksi bermasalah'));
@@ -497,7 +521,7 @@ export default function PantauSiswaPage() {
                 <span className="hidden sm:inline">⏱️ Waktu Massal</span>
               </button>
               <button 
-                onClick={() => setModalPesan({ isOpen: true, targetSiswa: null, pesan: '' })}
+                onClick={() => setModalPesan({ isOpen: true, targetSiswa: null, pesan: 'Perhatian untuk seluruh peserta ujian, harap dengarkan arahan pengawas!', stiker: 'pengumuman' })}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs md:text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-95"
                 title="Kirim pengumuman/pesan ke semua siswa yang sedang ujian"
               >
@@ -714,7 +738,7 @@ export default function PantauSiswaPage() {
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button 
-                            onClick={() => setModalPesan({ isOpen: true, targetSiswa: s, pesan: '' })}
+                            onClick={() => setModalPesan({ isOpen: true, targetSiswa: s, pesan: 'Harap tenang dan jangan berisik atau berbicara di dalam ruang ujian!', stiker: 'jangan_ribut' })}
                             className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
                             title="Kirim Teguran / Pesan Langsung ke Layar Siswa"
                           >
@@ -773,72 +797,117 @@ export default function PantauSiswaPage() {
       </div>
 
       {/* Modal Kirim Teguran / Broadcast */}
+      {/* Modal Kirim Teguran / Broadcast dengan Animasi Stiker */}
       {modalPesan.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl text-white ${modalPesan.targetSiswa ? 'bg-amber-500 shadow-amber-500/20' : 'bg-indigo-600 shadow-indigo-600/20'} shadow-md`}>
-                  {modalPesan.targetSiswa ? <AlertTriangle size={20} /> : <Megaphone size={20} />}
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-hidden flex flex-col border border-slate-200">
+            {/* Header Modal (Always Visible) */}
+            <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`p-2 rounded-xl text-white ${modalPesan.targetSiswa ? 'bg-amber-500 shadow-amber-500/20' : 'bg-indigo-600 shadow-indigo-600/20'} shadow-md shrink-0`}>
+                  {modalPesan.targetSiswa ? <AlertTriangle size={18} /> : <Megaphone size={18} />}
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-800">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-slate-800 truncate">
                     {modalPesan.targetSiswa ? `Kirim Teguran: ${modalPesan.targetSiswa.nama}` : 'Kirim Pengumuman Broadcast'}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
                     {modalPesan.targetSiswa 
-                      ? 'Pesan akan langsung muncul sebagai pop-up di layar ujian siswa ini.' 
-                      : 'Pesan akan langsung muncul di layar semua siswa yang sedang mengerjakan ujian.'}
+                      ? 'Pesan & stiker animasi akan langsung muncul di layar siswa ini.' 
+                      : 'Pesan & stiker animasi akan muncul di layar semua siswa yang sedang ujian.'}
                   </p>
                 </div>
               </div>
               <button 
-                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' })}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition"
+                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '', stiker: 'jangan_ribut' })}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition shrink-0 ml-2"
+                title="Tutup (ESC)"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            {/* Konten Modal (Scrollable) */}
+            <div className="p-4 space-y-3.5 overflow-y-auto flex-1 custom-scrollbar text-xs">
+              {/* Pilihan Stiker & Animasi */}
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Pilih Pesan Cepat (Template):</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    "Harap fokus ke layar ujian dan jangan menoleh!",
-                    "Dilarang membuka tab lain atau aplikasi tambahan!",
-                    "Posisi duduk tegak dan pastikan wajah terlihat!",
-                    "Waktu ujian tersisa 10 menit lagi, silakan periksa jawaban Anda!"
-                  ].map((temp, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setModalPesan(prev => ({ ...prev, pesan: temp }))}
-                      className="text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-left transition"
-                    >
-                      {temp}
-                    </button>
-                  ))}
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span>🎨 Pilih Stiker & Animasi Layar:</span>
+                  <span className="text-[10px] text-indigo-600 font-semibold normal-case">(Klik untuk pilih)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {DAFTAR_STIKER.map((item) => {
+                    const isSelected = modalPesan.stiker === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setModalPesan(prev => ({
+                            ...prev,
+                            stiker: item.id,
+                            pesan: prev.pesan.trim() === '' || DAFTAR_STIKER.some(d => d.defaultMsg === prev.pesan)
+                              ? item.defaultMsg
+                              : prev.pesan
+                          }));
+                        }}
+                        className={clsx(
+                          "p-2 rounded-xl border-2 text-left transition-all flex flex-col items-center justify-center text-center gap-1 relative active:scale-95",
+                          isSelected
+                            ? "border-indigo-600 bg-indigo-50/70 shadow-sm ring-2 ring-indigo-500/20"
+                            : "border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300"
+                        )}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-indigo-600"></span>
+                        )}
+                        <span className="text-2xl select-none">{item.emoji}</span>
+                        <span className="font-extrabold text-[11px] text-slate-800 leading-tight block">{item.label}</span>
+                        <span className="text-[9px] text-slate-500 leading-tight block">{item.sublabel}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* Preview Stiker Terpilih */}
+              {(() => {
+                const curStiker = DAFTAR_STIKER.find(d => d.id === modalPesan.stiker) || DAFTAR_STIKER[0];
+                return (
+                  <div className={clsx("p-2.5 rounded-xl border flex items-center justify-between gap-2", curStiker.badgeColor)}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{curStiker.emoji}</span>
+                      <div>
+                        <span className="font-bold text-xs block">Stiker Aktif: {curStiker.label}</span>
+                        <span className="text-[10px] opacity-80 block">Animasi stiker ini akan tampil di layar siswa</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold bg-white/70 px-2 py-0.5 rounded-md border shadow-2xs">Terpilih</span>
+                  </div>
+                );
+              })()}
+
+              {/* Textarea Pesan */}
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Isi Pesan / Teguran:</label>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Isi Pesan Teguran / Peringatan:
+                </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={modalPesan.pesan}
                   onChange={e => setModalPesan(prev => ({ ...prev, pesan: e.target.value }))}
-                  placeholder="Ketik pesan peringatan untuk siswa..."
-                  className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition"
+                  placeholder="Ketik pesan teguran untuk siswa..."
+                  className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition"
                 />
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+            {/* Footer Modal (Always Visible) */}
+            <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '' })}
-                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition"
+                onClick={() => setModalPesan({ isOpen: false, targetSiswa: null, pesan: '', stiker: 'jangan_ribut' })}
+                className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition"
               >
                 Batal
               </button>
@@ -846,9 +915,9 @@ export default function PantauSiswaPage() {
                 type="button"
                 onClick={handleKirimPesan}
                 disabled={isSendingPesan || !modalPesan.pesan.trim()}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 text-sm font-bold rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 text-xs font-bold rounded-xl transition shadow-md flex items-center gap-1.5 disabled:opacity-50 active:scale-95 cursor-pointer"
               >
-                <Send size={16} /> {isSendingPesan ? 'Mengirim...' : 'Kirim Sekarang'}
+                <Send size={14} /> {isSendingPesan ? 'Mengirim...' : 'Kirim Sekarang'}
               </button>
             </div>
           </div>

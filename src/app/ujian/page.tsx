@@ -573,6 +573,162 @@ const JodohkanInteractive = ({
     </div>
   );
 };
+// --- Komponen Visual Animasi & Stiker Teguran Pengawas ---
+const AnimatedStickerDisplay = ({ stiker }: { stiker?: string }) => {
+  switch (stiker) {
+    case 'jangan_ribut':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-amber-400/25 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-amber-400/30 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">🤫</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-amber-100 text-amber-900 border border-amber-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Shhh...!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black tracking-wide uppercase">
+            <span>🤫 Harap Tenang & Jangan Ribut!</span>
+          </div>
+        </div>
+      );
+
+    case 'fokus_layar':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-blue-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-indigo-500/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-indigo-600 via-blue-600 to-sky-400 flex items-center justify-center shadow-lg shadow-blue-500/30 border-4 border-white">
+              <span className="text-3xl animate-pulse">👀</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-blue-100 text-blue-900 border border-blue-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-bounce">
+              Fokus!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-900 border border-blue-300 text-xs font-black tracking-wide uppercase">
+            <span>👀 Jangan Menoleh ke Samping!</span>
+          </div>
+        </div>
+      );
+
+    case 'dilarang_nyontek':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-rose-500/30 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-red-500/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-rose-600 via-red-600 to-rose-400 flex items-center justify-center shadow-lg shadow-rose-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">🚫</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-rose-100 text-rose-900 border border-rose-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Jujur!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-100 text-rose-900 border border-rose-300 text-xs font-black tracking-wide uppercase">
+            <span>🚫 Dilarang Menyontek / Kerjasama!</span>
+          </div>
+        </div>
+      );
+
+    case 'buka_tab':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-red-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-amber-400/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-red-600 via-amber-600 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">⚠️</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-amber-100 text-amber-900 border border-amber-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Proteksi!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 text-red-900 border border-red-300 text-xs font-black tracking-wide uppercase">
+            <span>⚠️ Dilarang Membuka Tab / Aplikasi Lain!</span>
+          </div>
+        </div>
+      );
+
+    case 'duduk_tegak':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-sky-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-cyan-400/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-sky-600 via-cyan-600 to-blue-500 flex items-center justify-center shadow-lg shadow-sky-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">🪑</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-sky-100 text-sky-900 border border-sky-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Duduk Rapi!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-sky-100 text-sky-900 border border-sky-300 text-xs font-black tracking-wide uppercase">
+            <span>🪑 Duduk Tegak & Wajah Terlihat!</span>
+          </div>
+        </div>
+      );
+
+    case 'waktu_habis':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-amber-400/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-yellow-500 via-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30 border-4 border-white">
+              <span className="text-3xl animate-pulse">⏳</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-yellow-100 text-yellow-900 border border-yellow-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-bounce">
+              Waktu Habis!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-100 text-yellow-900 border border-yellow-300 text-xs font-black tracking-wide uppercase">
+            <span>⏳ Periksa Seluruh Lembar Jawaban!</span>
+          </div>
+        </div>
+      );
+
+    case 'semangat':
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-teal-400/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-emerald-600 via-teal-600 to-green-400 flex items-center justify-center shadow-lg shadow-emerald-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">💪</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Kamu Bisa!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black tracking-wide uppercase">
+            <span>💪 Tetap Semangat & Teliti!</span>
+          </div>
+        </div>
+      );
+
+    default: // pengumuman
+      return (
+        <div className="relative flex flex-col items-center justify-center py-2 select-none">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-purple-400/20 animate-ping opacity-75"></div>
+            <div className="absolute inset-2 rounded-full bg-indigo-400/20 animate-pulse"></div>
+            <div className="relative w-18 h-18 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/30 border-4 border-white">
+              <span className="text-3xl animate-bounce">📢</span>
+            </div>
+            <span className="absolute -top-1 -right-1 bg-purple-100 text-purple-900 border border-purple-300 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md animate-pulse">
+              Perhatian!
+            </span>
+          </div>
+          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-300 text-xs font-black tracking-wide uppercase">
+            <span>📢 Pengumuman Pengawas Ujian</span>
+          </div>
+        </div>
+      );
+  }
+};
 // -----------------------------------------------------------
 
 export default function UjianPage() {
@@ -619,6 +775,7 @@ export default function UjianPage() {
     pesan: string;
     pengirim: string;
     waktu: string;
+    stiker?: string;
   } | null>(null);
   const lastCheckedMessageTime = useRef<string>(new Date().toISOString());
   const lastBroadcastId = useRef<number>(0);
@@ -1056,13 +1213,23 @@ export default function UjianPage() {
                 });
               }
             } else if (logItem.aktivitas && logItem.aktivitas.startsWith('PESAN_PENGAWAS:::')) {
-              const msg = logItem.aktivitas.replace('PESAN_PENGAWAS:::', '');
+              const rawMsg = logItem.aktivitas.replace('PESAN_PENGAWAS:::', '');
+              let msgText = rawMsg;
+              let stikerKey = 'jangan_ribut';
+              if (rawMsg.startsWith('{')) {
+                try {
+                  const pJson = JSON.parse(rawMsg);
+                  msgText = pJson.pesan || msgText;
+                  stikerKey = pJson.stiker || stikerKey;
+                } catch(e) {}
+              }
               playAlertSound();
               setPesanPengawas({
                 isOpen: true,
-                pesan: msg,
+                pesan: msgText,
                 pengirim: 'Pengawas Ujian (Teguran Khusus)',
-                waktu: new Date(logItem.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                waktu: new Date(logItem.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                stiker: stikerKey
               });
             }
           }
@@ -1088,7 +1255,8 @@ export default function UjianPage() {
                   isOpen: true,
                   pesan: parsed.pesan,
                   pengirim: 'Pengumuman Pengawas (Semua Peserta)',
-                  waktu: new Date(parsed.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                  waktu: new Date(parsed.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                  stiker: parsed.stiker || 'pengumuman'
                 });
               }
             }
@@ -2209,30 +2377,64 @@ export default function UjianPage() {
         </div>
       )}
 
-      {/* Modal Pesan Teguran / Broadcast dari Pengawas */}
+      {/* Modal Pesan Teguran / Broadcast dari Pengawas dengan Stiker Animasi */}
       {pesanPengawas && pesanPengawas.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000] animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-amber-300">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <AlertTriangle size={36} className="text-white animate-bounce" />
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 z-[2000] animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col border-2 border-amber-300">
+            {/* Header dengan Gradien Sesuai Tema Stiker */}
+            <div className={clsx(
+              "px-4 py-3 text-white flex items-center justify-between shrink-0",
+              pesanPengawas.stiker === 'fokus_layar' ? "bg-gradient-to-r from-indigo-600 to-blue-600" :
+              pesanPengawas.stiker === 'dilarang_nyontek' ? "bg-gradient-to-r from-rose-600 to-red-600" :
+              pesanPengawas.stiker === 'buka_tab' ? "bg-gradient-to-r from-red-600 to-amber-600" :
+              pesanPengawas.stiker === 'duduk_tegak' ? "bg-gradient-to-r from-sky-600 to-cyan-600" :
+              pesanPengawas.stiker === 'waktu_habis' ? "bg-gradient-to-r from-yellow-500 to-amber-600" :
+              pesanPengawas.stiker === 'semangat' ? "bg-gradient-to-r from-emerald-600 to-teal-600" :
+              pesanPengawas.stiker === 'pengumuman' ? "bg-gradient-to-r from-purple-600 to-indigo-600" :
+              "bg-gradient-to-r from-amber-500 to-orange-500"
+            )}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">
+                  {pesanPengawas.stiker === 'fokus_layar' ? '👀' :
+                   pesanPengawas.stiker === 'dilarang_nyontek' ? '🚫' :
+                   pesanPengawas.stiker === 'buka_tab' ? '⚠️' :
+                   pesanPengawas.stiker === 'duduk_tegak' ? '🪑' :
+                   pesanPengawas.stiker === 'waktu_habis' ? '⏳' :
+                   pesanPengawas.stiker === 'semangat' ? '💪' :
+                   pesanPengawas.stiker === 'pengumuman' ? '📢' : '🤫'}
+                </span>
+                <div>
+                  <h3 className="font-black text-sm leading-tight">Pemberitahuan Pengawas</h3>
+                  <p className="text-[10px] text-white/90 font-medium">{pesanPengawas.pengirim}</p>
+                </div>
               </div>
-              <h3 className="font-black text-xl tracking-tight">Pemberitahuan Pengawas</h3>
-              <p className="text-xs text-amber-100 mt-1 font-semibold uppercase tracking-wider">{pesanPengawas.pengirim}</p>
+              <button
+                type="button"
+                onClick={() => setPesanPengawas(null)}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/20 transition shrink-0 ml-2"
+                title="Tutup (ESC)"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="p-6 text-center space-y-4">
-              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-left">
-                <p className="text-slate-800 font-bold text-base md:text-lg leading-relaxed">
+            {/* Konten dengan Stiker Animasi */}
+            <div className="p-4 space-y-3 text-center overflow-y-auto flex-1 custom-scrollbar">
+              <AnimatedStickerDisplay stiker={pesanPengawas.stiker} />
+
+              <div className="bg-amber-50/70 rounded-2xl p-3 border border-amber-200 text-left">
+                <p className="text-slate-800 font-bold text-xs sm:text-sm leading-relaxed">
                   "{pesanPengawas.pesan}"
                 </p>
-                <span className="text-[11px] text-slate-400 font-semibold block mt-2">Diterima pukul {pesanPengawas.waktu}</span>
+                <span className="text-[10px] text-slate-400 font-semibold block mt-1.5">
+                  Diterima pukul {pesanPengawas.waktu}
+                </span>
               </div>
 
               <button
                 type="button"
                 onClick={() => setPesanPengawas(null)}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 transition active:scale-95 text-sm uppercase tracking-wider"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 rounded-xl shadow-md transition active:scale-95 text-xs uppercase tracking-wider cursor-pointer"
               >
                 Saya Mengerti & Lanjutkan Ujian
               </button>
