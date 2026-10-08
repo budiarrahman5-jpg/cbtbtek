@@ -623,6 +623,16 @@ export default function UjianPage() {
   const lastCheckedMessageTime = useRef<string>(new Date().toISOString());
   const lastBroadcastId = useRef<number>(0);
 
+  // Fitur Proctor: Notifikasi Perubahan / Penambahan / Pengurangan Waktu Ujian
+  const [notifWaktu, setNotifWaktu] = useState<{
+    isOpen: boolean;
+    tipe: 'tambah' | 'kurang';
+    menit: number;
+    pesan: string;
+    waktuBaru?: number;
+  } | null>(null);
+  const lastMassTimeId = useRef<number>(0);
+
   // Pengaturan Tampil Nilai & Mode Review Jawaban
   const [tampilNilai, setTampilNilai] = useState('ON');
   const [modeReview, setModeReview] = useState('OFF');
@@ -856,7 +866,7 @@ export default function UjianPage() {
       } catch (e) {}
     }
 
-    // Ambil jawaban sementara terbaru dari database server jika ada
+    // Ambil jawaban sementara & sisa waktu terbaru dari database server jika ada
     supabase
       .from('users')
       .select('jawaban_sementara, sisa_waktu')
@@ -872,6 +882,11 @@ export default function UjianPage() {
             return merged;
           });
         }
+        // Jika siswa pindah komputer setelah lowbatt/kendala, pulihkan sisa waktu dari database
+        if (dbUser?.sisa_waktu && dbUser.sisa_waktu > 0 && !localStorage.getItem(timerKey)) {
+          setSisaWaktu(dbUser.sisa_waktu);
+          localStorage.setItem(timerKey, dbUser.sisa_waktu.toString());
+        }
       });
     
     const rguKey = `cbt_ragu_${u.id}_${p.id}`;
@@ -882,6 +897,10 @@ export default function UjianPage() {
     const savedTimer = localStorage.getItem(timerKey);
     if (savedTimer) {
       setSisaWaktu(parseInt(savedTimer, 10));
+    } else if (u.sisa_waktu && u.sisa_waktu > 0) {
+      // JEDA KENDALA / LOWBATT: Menggunakan sisa waktu tersimpan di akun siswa
+      setSisaWaktu(u.sisa_waktu);
+      localStorage.setItem(timerKey, u.sisa_waktu.toString());
     } else {
       setSisaWaktu((p.durasi_menit || 60) * 60);
     }
@@ -1003,28 +1022,49 @@ export default function UjianPage() {
           return;
         }
 
-        // 1. Cek pesan individual dari tabel log
+        // 1. Cek pesan & perubahan waktu individual dari tabel log
         const { data: logs } = await supabase
           .from('log')
           .select('*')
           .eq('user_id', user.id)
           .gt('created_at', lastCheckedMessageTime.current)
           .order('created_at', { ascending: false })
-          .limit(1);
+          .limit(3);
 
         if (logs && logs.length > 0) {
-          const logItem = logs[0];
-          lastCheckedMessageTime.current = logItem.created_at;
-          if (logItem.aktivitas && logItem.aktivitas.startsWith('PESAN_PENGAWAS:::')) {
-            const msg = logItem.aktivitas.replace('PESAN_PENGAWAS:::', '');
-            playAlertSound();
-            setPesanPengawas({
-              isOpen: true,
-              pesan: msg,
-              pengirim: 'Pengawas Ujian (Teguran Khusus)',
-              waktu: new Date(logItem.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-            });
-            return;
+          lastCheckedMessageTime.current = logs[0].created_at;
+          for (const logItem of logs) {
+            if (logItem.aktivitas && logItem.aktivitas.startsWith('UBAH_WAKTU:::')) {
+              const parts = logItem.aktivitas.split(':::');
+              const deltaDetik = parseInt(parts[1], 10) || 0;
+              const alasan = parts[2] || 'Penyesuaian oleh Proktor';
+              if (deltaDetik !== 0) {
+                setSisaWaktu(prev => {
+                  const nextVal = Math.max(10, prev + deltaDetik);
+                  localStorage.setItem(`cbt_timer_${user.id}_${paket.id}`, nextVal.toString());
+                  return nextVal;
+                });
+                playAlertSound();
+                const mVal = Math.abs(Math.round(deltaDetik / 60));
+                setNotifWaktu({
+                  isOpen: true,
+                  tipe: deltaDetik > 0 ? 'tambah' : 'kurang',
+                  menit: mVal,
+                  pesan: deltaDetik > 0 
+                    ? `Waktu ujian Anda telah DITAMBAHKAN ${mVal} MENIT oleh Pengawas/Proktor. (${alasan})`
+                    : `Waktu ujian Anda telah DIKURANGI ${mVal} MENIT oleh Pengawas/Proktor. (${alasan})`
+                });
+              }
+            } else if (logItem.aktivitas && logItem.aktivitas.startsWith('PESAN_PENGAWAS:::')) {
+              const msg = logItem.aktivitas.replace('PESAN_PENGAWAS:::', '');
+              playAlertSound();
+              setPesanPengawas({
+                isOpen: true,
+                pesan: msg,
+                pengirim: 'Pengawas Ujian (Teguran Khusus)',
+                waktu: new Date(logItem.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+              });
+            }
           }
         }
 
@@ -1050,6 +1090,45 @@ export default function UjianPage() {
                   pengirim: 'Pengumuman Pengawas (Semua Peserta)',
                   waktu: new Date(parsed.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
                 });
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 3. Cek penambahan/pengurangan waktu massal dari pengaturan
+        const { data: massData } = await supabase
+          .from('pengaturan')
+          .select('nilai')
+          .eq('kunci', 'tambah_waktu_massal')
+          .maybeSingle();
+
+        if (massData?.nilai) {
+          try {
+            const parsed = JSON.parse(massData.nilai);
+            if (parsed.id && parsed.id > lastMassTimeId.current) {
+              lastMassTimeId.current = parsed.id;
+              if (!parsed.paket_id || parsed.paket_id === 'SEMUA' || parsed.paket_id === paket.id) {
+                const diffMs = Date.now() - (new Date(parsed.waktu).getTime() || 0);
+                if (diffMs < 5 * 60 * 1000) {
+                  const deltaDetik = parseInt(parsed.delta_detik, 10) || 0;
+                  if (deltaDetik !== 0) {
+                    setSisaWaktu(prev => {
+                      const nextVal = Math.max(10, prev + deltaDetik);
+                      localStorage.setItem(`cbt_timer_${user.id}_${paket.id}`, nextVal.toString());
+                      return nextVal;
+                    });
+                    playAlertSound();
+                    const mVal = Math.abs(Math.round(deltaDetik / 60));
+                    setNotifWaktu({
+                      isOpen: true,
+                      tipe: deltaDetik > 0 ? 'tambah' : 'kurang',
+                      menit: mVal,
+                      pesan: deltaDetik > 0
+                        ? `Waktu ujian serentak DITAMBAHKAN ${mVal} MENIT oleh Pengawas/Proktor. (${parsed.alasan || 'Kompensasi Kendala Bersama'})`
+                        : `Waktu ujian serentak DIKURANGI ${mVal} MENIT oleh Pengawas/Proktor. (${parsed.alasan || 'Penyesuaian Waktu'})`
+                    });
+                  }
+                }
               }
             }
           } catch (e) {}
@@ -2154,6 +2233,56 @@ export default function UjianPage() {
                 type="button"
                 onClick={() => setPesanPengawas(null)}
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 rounded-2xl shadow-lg shadow-amber-500/30 transition active:scale-95 text-sm uppercase tracking-wider"
+              >
+                Saya Mengerti & Lanjutkan Ujian
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Notifikasi Perubahan Waktu Ujian dari Pengawas */}
+      {notifWaktu && notifWaktu.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[2050] animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-indigo-200">
+            <div className={clsx(
+              "p-6 text-white text-center",
+              notifWaktu.tipe === 'tambah' ? "bg-gradient-to-r from-emerald-600 to-teal-600" : "bg-gradient-to-r from-rose-600 to-amber-600"
+            )}>
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <Clock size={36} className="text-white animate-pulse" />
+              </div>
+              <h3 className="font-black text-xl tracking-tight">
+                {notifWaktu.tipe === 'tambah' ? 'Waktu Ujian Ditambahkan! 🎉' : 'Waktu Ujian Disesuaikan ⏱️'}
+              </h3>
+              <p className="text-xs text-white/90 mt-1 font-semibold uppercase tracking-wider">
+                Instruksi Pengawas / Proktor
+              </p>
+            </div>
+
+            <div className="p-6 text-center space-y-4">
+              <div className={clsx(
+                "rounded-2xl p-4 border text-left",
+                notifWaktu.tipe === 'tambah' ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+              )}>
+                <div className="flex items-center gap-2 mb-2 font-black text-sm">
+                  <span className={clsx(
+                    "px-2.5 py-1 rounded-lg text-white text-xs font-bold shadow-xs",
+                    notifWaktu.tipe === 'tambah' ? "bg-emerald-600" : "bg-rose-600"
+                  )}>
+                    {notifWaktu.tipe === 'tambah' ? `+${notifWaktu.menit} Menit` : `-${notifWaktu.menit} Menit`}
+                  </span>
+                  <span className="text-slate-700">Penyesuaian Durasi</span>
+                </div>
+                <p className="text-slate-800 font-bold text-sm md:text-base leading-relaxed">
+                  "{notifWaktu.pesan}"
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setNotifWaktu(null)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3.5 rounded-2xl shadow-lg transition active:scale-95 text-sm uppercase tracking-wider cursor-pointer"
               >
                 Saya Mengerti & Lanjutkan Ujian
               </button>

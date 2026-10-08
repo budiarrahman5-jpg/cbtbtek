@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle, StopCircle } from 'lucide-react';
+import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle, StopCircle, Plus, Minus, Timer } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function PantauSiswaPage() {
@@ -33,6 +33,40 @@ export default function PantauSiswaPage() {
     isOpen: false,
     siswa: null,
     paketId: '',
+    isProcessing: false
+  });
+
+  // State Atur Waktu Siswa Individual (+ / -)
+  const [modalAturWaktu, setModalAturWaktu] = useState<{
+    isOpen: boolean;
+    siswa: any | null;
+    tipeAksi: 'tambah' | 'kurang';
+    menit: number;
+    alasan: string;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    siswa: null,
+    tipeAksi: 'tambah',
+    menit: 10,
+    alasan: 'Kompensasi kendala laptop / lowbatt',
+    isProcessing: false
+  });
+
+  // State Atur Waktu Massal Seluruh Siswa (+ / -)
+  const [modalWaktuMassal, setModalWaktuMassal] = useState<{
+    isOpen: boolean;
+    paketId: string;
+    tipeAksi: 'tambah' | 'kurang';
+    menit: number;
+    alasan: string;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    paketId: 'SEMUA',
+    tipeAksi: 'tambah',
+    menit: 10,
+    alasan: 'Kompensasi gangguan teknis / jaringan bersama',
     isProcessing: false
   });
 
@@ -328,6 +362,98 @@ export default function PantauSiswaPage() {
     setIsSendingPesan(false);
   };
 
+  const handleExecuteAturWaktu = async () => {
+    if (!modalAturWaktu.siswa) return;
+    const s = modalAturWaktu.siswa;
+    const menit = Math.max(1, modalAturWaktu.menit || 1);
+    const deltaDetik = modalAturWaktu.tipeAksi === 'tambah' ? menit * 60 : -(menit * 60);
+    const durasiAwal = s.sisa_waktu > 0 ? s.sisa_waktu : (s.paket?.durasi_menit || 60) * 60;
+    const waktuBaru = Math.max(10, durasiAwal + deltaDetik);
+
+    setModalAturWaktu(prev => ({ ...prev, isProcessing: true }));
+
+    try {
+      // 1. Update sisa_waktu siswa di tabel users
+      const { error: errUpdate } = await supabase
+        .from('users')
+        .update({ sisa_waktu: waktuBaru })
+        .eq('id', s.id);
+      if (errUpdate) throw errUpdate;
+
+      // 2. Catat ke tabel log untuk realtime trigger ke browser siswa
+      const { error: errLog } = await supabase
+        .from('log')
+        .insert({
+          user_id: s.id,
+          aktivitas: `UBAH_WAKTU:::${deltaDetik}:::${modalAturWaktu.alasan.trim() || 'Penyesuaian oleh Proktor'}`
+        });
+      if (errLog) throw errLog;
+
+      // Update state lokal
+      setSiswa(prev => prev.map(item => item.id === s.id ? { ...item, sisa_waktu: waktuBaru } : item));
+      setModalAturWaktu({ isOpen: false, siswa: null, tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false });
+      alert(`Waktu ujian untuk "${s.nama}" berhasil ${modalAturWaktu.tipeAksi === 'tambah' ? 'DITAMBAH' : 'DIKURANGI'} ${menit} menit!\n\nSisa waktu baru: ~${Math.floor(waktuBaru / 60)} menit.`);
+    } catch (err: any) {
+      console.error('Error atur waktu siswa:', err);
+      alert('Gagal mengatur waktu: ' + (err.message || 'Terjadi kesalahan sistem'));
+      setModalAturWaktu(prev => ({ ...prev, isProcessing: false }));
+    }
+  };
+
+  const handleExecuteWaktuMassal = async () => {
+    const menit = Math.max(1, modalWaktuMassal.menit || 1);
+    const deltaDetik = modalWaktuMassal.tipeAksi === 'tambah' ? menit * 60 : -(menit * 60);
+
+    setModalWaktuMassal(prev => ({ ...prev, isProcessing: true }));
+
+    try {
+      // 1. Tentukan target siswa yang sedang ujian
+      const siswaTarget = siswa.filter(s => {
+        if (s.status_ujian === 'Selesai') return false;
+        if (modalWaktuMassal.paketId === 'SEMUA') return true;
+        const pId = s.paket_aktif_id || s.paket?.id;
+        return pId === modalWaktuMassal.paketId;
+      });
+
+      if (siswaTarget.length === 0) {
+        alert('Tidak ditemukan siswa yang sedang aktif/mengerjakan pada target paket yang dipilih.');
+        setModalWaktuMassal(prev => ({ ...prev, isProcessing: false }));
+        return;
+      }
+
+      // 2. Update sisa_waktu seluruh siswa target di tabel users & log
+      for (const s of siswaTarget) {
+        const durasiAwal = s.sisa_waktu > 0 ? s.sisa_waktu : (s.paket?.durasi_menit || 60) * 60;
+        const waktuBaru = Math.max(10, durasiAwal + deltaDetik);
+        await supabase.from('users').update({ sisa_waktu: waktuBaru }).eq('id', s.id);
+        await supabase.from('log').insert({
+          user_id: s.id,
+          aktivitas: `UBAH_WAKTU:::${deltaDetik}:::${modalWaktuMassal.alasan.trim() || 'Penyesuaian Massal Proktor'}`
+        });
+      }
+
+      // 3. Upsert ke tabel pengaturan untuk sinkronisasi massal real-time
+      await supabase.from('pengaturan').upsert({
+        kunci: 'tambah_waktu_massal',
+        nilai: JSON.stringify({
+          id: Date.now(),
+          paket_id: modalWaktuMassal.paketId,
+          delta_detik: deltaDetik,
+          alasan: modalWaktuMassal.alasan.trim() || 'Penyesuaian Massal Proktor',
+          waktu: new Date().toISOString()
+        })
+      }, { onConflict: 'kunci' });
+
+      setModalWaktuMassal({ isOpen: false, paketId: 'SEMUA', tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false });
+      await fetchData(false);
+      alert(`Waktu ujian massal BERHASIL ${modalWaktuMassal.tipeAksi === 'tambah' ? 'DITAMBAHKAN' : 'DIKURANGI'} ${menit} menit ke ${siswaTarget.length} siswa!`);
+    } catch (err: any) {
+      console.error('Error waktu massal:', err);
+      alert('Gagal mengatur waktu massal: ' + (err.message || 'Terjadi kesalahan sistem'));
+      setModalWaktuMassal(prev => ({ ...prev, isProcessing: false }));
+    }
+  };
+
   const filteredSiswa = siswa.filter(s => 
     s.nama?.toLowerCase().includes(search.toLowerCase()) || 
     s.username?.toLowerCase().includes(search.toLowerCase()) ||
@@ -355,6 +481,21 @@ export default function PantauSiswaPage() {
               Live Monitoring Ujian
             </h2>
             <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setModalWaktuMassal({
+                  isOpen: true,
+                  paketId: 'SEMUA',
+                  tipeAksi: 'tambah',
+                  menit: 10,
+                  alasan: 'Kompensasi gangguan teknis / kendala bersama',
+                  isProcessing: false
+                })}
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-lg font-bold text-xs md:text-sm transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                title="Tambah atau kurangi waktu ujian secara serentak untuk seluruh peserta"
+              >
+                <Timer size={16} />
+                <span className="hidden sm:inline">⏱️ Waktu Massal</span>
+              </button>
               <button 
                 onClick={() => setModalPesan({ isOpen: true, targetSiswa: null, pesan: '' })}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg font-bold text-xs md:text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-95"
@@ -581,6 +722,22 @@ export default function PantauSiswaPage() {
                           </button>
                           {!isSelesai && (
                             <button 
+                              onClick={() => setModalAturWaktu({
+                                isOpen: true,
+                                siswa: s,
+                                tipeAksi: 'tambah',
+                                menit: 10,
+                                alasan: 'Kompensasi kendala laptop / lowbatt',
+                                isProcessing: false
+                              })}
+                              className="text-xs bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1 border border-amber-200 active:scale-95"
+                              title="Tambah atau kurangi waktu ujian untuk siswa ini"
+                            >
+                              <Clock size={14} /> Waktu
+                            </button>
+                          )}
+                          {!isSelesai && (
+                            <button 
                               onClick={() => handleOpenHentiPaksa(s)}
                               className="text-xs bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1 border border-rose-200 active:scale-95"
                               title="Hentikan paksa ujian siswa ini dan simpan jawaban saat ini langsung ke Hasil Ujian"
@@ -802,6 +959,388 @@ export default function PantauSiswaPage() {
                   <>
                     <StopCircle size={16} />
                     <span>Hentikan Paksa & Simpan Jawaban</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Atur Waktu Siswa Individual */}
+      {modalAturWaktu.isOpen && modalAturWaktu.siswa && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-amber-100">
+            {/* Header Modal */}
+            <div className="p-5 border-b border-amber-100 flex justify-between items-center bg-amber-50/70">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl text-white bg-amber-500 shadow-amber-500/20 shadow-md">
+                  <Clock size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Atur Waktu: {modalAturWaktu.siswa.nama}
+                  </h3>
+                  <p className="text-xs text-amber-800 font-medium">
+                    Sesuaikan durasi waktu ujian siswa (kompensasi kendala teknis / lowbatt)
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalAturWaktu({ isOpen: false, siswa: null, tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false })}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-amber-100/60 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Konten Modal */}
+            <div className="p-5 space-y-4 text-sm">
+              {/* Sisa Waktu Saat Ini */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-500 font-bold block uppercase tracking-wider">Sisa Waktu Siswa Saat Ini:</span>
+                  <span className="text-lg font-black text-slate-800">
+                    {modalAturWaktu.siswa.sisa_waktu > 0
+                      ? `${Math.floor(modalAturWaktu.siswa.sisa_waktu / 60)} Menit ${modalAturWaktu.siswa.sisa_waktu % 60} Detik`
+                      : `${modalAturWaktu.siswa.paket?.durasi_menit || 60} Menit (Durasi Penuh)`}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-slate-500 font-bold block uppercase tracking-wider">Estimasi Waktu Baru:</span>
+                  <span className={clsx(
+                    "text-lg font-black",
+                    modalAturWaktu.tipeAksi === 'tambah' ? "text-emerald-600" : "text-rose-600"
+                  )}>
+                    {(() => {
+                      const cur = modalAturWaktu.siswa.sisa_waktu > 0 ? modalAturWaktu.siswa.sisa_waktu : (modalAturWaktu.siswa.paket?.durasi_menit || 60) * 60;
+                      const delta = modalAturWaktu.tipeAksi === 'tambah' ? (modalAturWaktu.menit || 0) * 60 : -((modalAturWaktu.menit || 0) * 60);
+                      const res = Math.max(10, cur + delta);
+                      return `~${Math.floor(res / 60)} Menit`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Pilihan Mode: Tambah vs Kurang */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Jenis Penyesuaian:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalAturWaktu(prev => ({ ...prev, tipeAksi: 'tambah' }))}
+                    className={clsx(
+                      "py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border-2 transition",
+                      modalAturWaktu.tipeAksi === 'tambah'
+                        ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    <Plus size={16} /> Tambah Waktu Ujian (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalAturWaktu(prev => ({ ...prev, tipeAksi: 'kurang' }))}
+                    className={clsx(
+                      "py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border-2 transition",
+                      modalAturWaktu.tipeAksi === 'kurang'
+                        ? "bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-500/20"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    <Minus size={16} /> Kurangi Waktu Ujian (-)
+                  </button>
+                </div>
+              </div>
+
+              {/* Preset Menit Cepat */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Pilih Durasi Cepat:</label>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 20, 30].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModalAturWaktu(prev => ({ ...prev, menit: m }))}
+                      className={clsx(
+                        "px-3 py-1.5 rounded-lg font-bold text-xs border transition",
+                        modalAturWaktu.menit === m
+                          ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50"
+                      )}
+                    >
+                      {modalAturWaktu.tipeAksi === 'tambah' ? `+${m} Menit` : `-${m} Menit`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input Kustom Menit */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Jumlah Menit (Kustom):</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={modalAturWaktu.menit || ''}
+                    onChange={(e) => setModalAturWaktu(prev => ({ ...prev, menit: Math.max(1, parseInt(e.target.value) || 0) }))}
+                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition"
+                    placeholder="Contoh: 10"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Menit</span>
+                </div>
+              </div>
+
+              {/* Alasan / Catatan Pengawas */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Alasan Penyesuaian (Akan Tampil ke Siswa):</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    "Kompensasi kendala laptop / lowbatt",
+                    "Pindah perangkat komputer lab",
+                    "Koneksi WiFi lab terputus sementara",
+                    "Kompensasi kendala teknis"
+                  ].map((temp, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setModalAturWaktu(prev => ({ ...prev, alasan: temp }))}
+                      className="text-[11px] bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 font-semibold px-2 py-1 rounded-md border border-slate-200 transition"
+                    >
+                      {temp}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={modalAturWaktu.alasan}
+                  onChange={(e) => setModalAturWaktu(prev => ({ ...prev, alasan: e.target.value }))}
+                  placeholder="Ketik keterangan alasan..."
+                  className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 transition"
+                />
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setModalAturWaktu({ isOpen: false, siswa: null, tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false })}
+                disabled={modalAturWaktu.isProcessing}
+                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAturWaktu}
+                disabled={modalAturWaktu.isProcessing || !modalAturWaktu.menit}
+                className={clsx(
+                  "px-5 py-2.5 text-sm font-bold text-white rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95",
+                  modalAturWaktu.tipeAksi === 'tambah'
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+                    : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/30"
+                )}
+              >
+                {modalAturWaktu.isProcessing ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Menerapkan...</span>
+                  </>
+                ) : (
+                  <>
+                    {modalAturWaktu.tipeAksi === 'tambah' ? <Plus size={16} /> : <Minus size={16} />}
+                    <span>{modalAturWaktu.tipeAksi === 'tambah' ? `Tambah ${modalAturWaktu.menit} Menit` : `Kurangi ${modalAturWaktu.menit} Menit`}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah / Kurangi Waktu Massal Seluruh Siswa */}
+      {modalWaktuMassal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-amber-100">
+            {/* Header Modal */}
+            <div className="p-5 border-b border-amber-100 flex justify-between items-center bg-amber-50/70">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl text-white bg-amber-500 shadow-amber-500/20 shadow-md">
+                  <Timer size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Penyesuaian Waktu Ujian Serentak (Massal)
+                  </h3>
+                  <p className="text-xs text-amber-800 font-medium">
+                    Terapkan penambahan atau pengurangan durasi ke banyak siswa sekaligus
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalWaktuMassal({ isOpen: false, paketId: 'SEMUA', tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false })}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-amber-100/60 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Konten Modal */}
+            <div className="p-5 space-y-4 text-sm">
+              {/* Target Paket */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Target Peserta Ujian:
+                </label>
+                <select
+                  value={modalWaktuMassal.paketId}
+                  onChange={(e) => setModalWaktuMassal(prev => ({ ...prev, paketId: e.target.value }))}
+                  className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition bg-white"
+                >
+                  <option value="SEMUA">🌐 Semua Siswa yang Sedang Mengerjakan Ujian ({siswa.filter(s => s.status_ujian !== 'Selesai').length} Siswa)</option>
+                  {paketList.map((p: any) => {
+                    const count = siswa.filter(s => s.status_ujian !== 'Selesai' && (s.paket_aktif_id === p.id || s.paket?.id === p.id)).length;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        📦 Paket: {p.nama_paket} ({count} Siswa Aktif)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Mode Aksi: Tambah vs Kurang */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Jenis Tindakan Massal:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalWaktuMassal(prev => ({ ...prev, tipeAksi: 'tambah' }))}
+                    className={clsx(
+                      "py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border-2 transition",
+                      modalWaktuMassal.tipeAksi === 'tambah'
+                        ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    <Plus size={16} /> Tambah Waktu Massal (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalWaktuMassal(prev => ({ ...prev, tipeAksi: 'kurang' }))}
+                    className={clsx(
+                      "py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 border-2 transition",
+                      modalWaktuMassal.tipeAksi === 'kurang'
+                        ? "bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-500/20"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    )}
+                  >
+                    <Minus size={16} /> Kurangi Waktu Massal (-)
+                  </button>
+                </div>
+              </div>
+
+              {/* Preset Menit Cepat */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Pilih Durasi Cepat:</label>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 20, 30].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModalWaktuMassal(prev => ({ ...prev, menit: m }))}
+                      className={clsx(
+                        "px-3 py-1.5 rounded-lg font-bold text-xs border transition",
+                        modalWaktuMassal.menit === m
+                          ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50"
+                      )}
+                    >
+                      {modalWaktuMassal.tipeAksi === 'tambah' ? `+${m} Menit` : `-${m} Menit`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input Kustom Menit */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Jumlah Menit (Kustom):</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={modalWaktuMassal.menit || ''}
+                    onChange={(e) => setModalWaktuMassal(prev => ({ ...prev, menit: Math.max(1, parseInt(e.target.value) || 0) }))}
+                    className="w-full border-2 border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition"
+                    placeholder="Contoh: 15"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Menit</span>
+                </div>
+              </div>
+
+              {/* Alasan / Catatan Massal */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Alasan / Pengumuman ke Siswa:</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    "Kompensasi gangguan WiFi / server lab",
+                    "Mati listrik / kendala bersama",
+                    "Kompensasi kendala teknis bersama",
+                    "Penyesuaian waktu oleh proktor"
+                  ].map((temp, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setModalWaktuMassal(prev => ({ ...prev, alasan: temp }))}
+                      className="text-[11px] bg-slate-100 hover:bg-amber-50 hover:text-amber-800 text-slate-600 font-semibold px-2 py-1 rounded-md border border-slate-200 transition"
+                    >
+                      {temp}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={modalWaktuMassal.alasan}
+                  onChange={(e) => setModalWaktuMassal(prev => ({ ...prev, alasan: e.target.value }))}
+                  placeholder="Ketik keterangan pengumuman..."
+                  className="w-full border-2 border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-amber-500 transition"
+                />
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setModalWaktuMassal({ isOpen: false, paketId: 'SEMUA', tipeAksi: 'tambah', menit: 10, alasan: '', isProcessing: false })}
+                disabled={modalWaktuMassal.isProcessing}
+                className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteWaktuMassal}
+                disabled={modalWaktuMassal.isProcessing || !modalWaktuMassal.menit}
+                className={clsx(
+                  "px-5 py-2.5 text-sm font-bold text-white rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95",
+                  modalWaktuMassal.tipeAksi === 'tambah'
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+                    : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/30"
+                )}
+              >
+                {modalWaktuMassal.isProcessing ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Menerapkan ke Semua...</span>
+                  </>
+                ) : (
+                  <>
+                    {modalWaktuMassal.tipeAksi === 'tambah' ? <Plus size={16} /> : <Minus size={16} />}
+                    <span>{modalWaktuMassal.tipeAksi === 'tambah' ? `Terapkan Tambah ${modalWaktuMassal.menit} Menit` : `Terapkan Kurang ${modalWaktuMassal.menit} Menit`}</span>
                   </>
                 )}
               </button>
