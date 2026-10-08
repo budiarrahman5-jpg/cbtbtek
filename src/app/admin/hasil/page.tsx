@@ -907,13 +907,20 @@ export default function HasilUjianPage() {
   };
 
   const handleResetUjian = async (hasilRow: any) => {
-    if (!confirm(`Yakin ingin mereset ujian siswa ${hasilRow.users?.nama}? Ini akan menghapus hasil secara permanen dan mereset status ujian sehingga siswa dapat mengikuti ujian ini lagi dari awal.`)) return;
+    const namaPaket = hasilRow.paket?.nama_paket || 'paket ini';
+    if (!confirm(`Yakin ingin mereset hasil ujian "${namaPaket}" untuk siswa ${hasilRow.users?.nama}?\n\n• Hanya nilai paket "${namaPaket}" yang akan dihapus agar siswa dapat mengulang.\n• Nilai ujian paket mata pelajaran lain TETAP AMAN dan tidak akan terhapus.`)) return;
 
     try {
       await supabase.from('hasil').delete().eq('id', hasilRow.id);
-      await supabase.from('users').update({ status_ujian: 'Belum Ujian', status_login: '0' }).eq('id', hasilRow.user_id);
+      await supabase.from('users').update({ 
+        status_ujian: 'Belum Ujian', 
+        status_login: '0',
+        paket_aktif_id: null,
+        jawaban_sementara: {},
+        sisa_waktu: null
+      }).eq('id', hasilRow.user_id);
       
-      alert('Ujian berhasil direset!');
+      alert(`✅ Hasil ujian paket "${namaPaket}" untuk siswa ${hasilRow.users?.nama} berhasil direset! Siswa dapat mengulang ujian paket ini.`);
       fetchHasil();
     } catch (err) {
       console.error(err);

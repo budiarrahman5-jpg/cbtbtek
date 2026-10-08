@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle, StopCircle, Plus, Minus, Timer } from 'lucide-react';
+import { MonitorPlay, Search, RefreshCw, PowerOff, CheckCircle2, Clock, XCircle, Trash2, MessageSquare, Megaphone, Send, X, AlertTriangle, StopCircle, Plus, Minus, Timer, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 
 // Koleksi Stiker & Animasi Teguran Pengawas
@@ -85,6 +85,25 @@ export default function PantauSiswaPage() {
     tipeAksi: 'tambah',
     menit: 10,
     alasan: 'Kompensasi gangguan teknis / jaringan bersama',
+    isProcessing: false
+  });
+
+  // State Modal Reset Ujian (Spesifik Paket / Semua Paket)
+  const [modalResetUjian, setModalResetUjian] = useState<{
+    isOpen: boolean;
+    siswa: any | null;
+    paketId: string;
+    mode: 'single' | 'all';
+    riwayatPaket: any[];
+    isLoadingRiwayat: boolean;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    siswa: null,
+    paketId: '',
+    mode: 'single',
+    riwayatPaket: [],
+    isLoadingRiwayat: false,
     isProcessing: false
   });
 
@@ -332,17 +351,111 @@ export default function PantauSiswaPage() {
     }
   };
 
-  const handleResetUjian = async (id: string, nama: string) => {
-    if (!confirm(`Yakin ingin mereset ujian siswa ${nama}? Ini akan menghapus hasil secara permanen dan mereset status ujian sehingga siswa dapat mengikuti ujian ini lagi dari awal.`)) return;
+  const handleOpenResetUjian = async (s: any) => {
+    const defaultPaketId = s.paket_aktif_id || (paketList.find(p => p.status === 'Aktif')?.id) || (paketList[0]?.id) || '';
+    
+    setModalResetUjian({
+      isOpen: true,
+      siswa: s,
+      paketId: defaultPaketId,
+      mode: 'single',
+      riwayatPaket: [],
+      isLoadingRiwayat: true,
+      isProcessing: false
+    });
 
     try {
-      await supabase.from('hasil').delete().eq('user_id', id);
-      await supabase.from('users').update({ status_ujian: 'Belum Ujian', status_login: '0' }).eq('id', id);
-      
-      alert('Ujian berhasil direset!');
+      const { data: userHasil } = await supabase
+        .from('hasil')
+        .select('id, paket_id, skor_akhir, created_at, paket(id, nama_paket)')
+        .eq('user_id', s.id);
+
+      const riwayat = userHasil || [];
+      let targetPaket = defaultPaketId;
+      if (!s.paket_aktif_id && riwayat.length > 0) {
+        targetPaket = riwayat[riwayat.length - 1].paket_id;
+      }
+
+      setModalResetUjian(prev => ({
+        ...prev,
+        riwayatPaket: riwayat,
+        paketId: prev.paketId || targetPaket,
+        isLoadingRiwayat: false
+      }));
+    } catch (e) {
+      console.error('Gagal mengambil riwayat hasil siswa:', e);
+      setModalResetUjian(prev => ({ ...prev, isLoadingRiwayat: false }));
+    }
+  };
+
+  const handleExecuteResetUjian = async () => {
+    const s = modalResetUjian.siswa;
+    if (!s) return;
+
+    if (modalResetUjian.mode === 'single' && !modalResetUjian.paketId) {
+      alert('Silakan pilih paket ujian yang ingin direset!');
+      return;
+    }
+
+    setModalResetUjian(prev => ({ ...prev, isProcessing: true }));
+
+    try {
+      if (modalResetUjian.mode === 'single') {
+        const targetPaketId = modalResetUjian.paketId;
+        const targetPaketObj = paketList.find(p => p.id === targetPaketId);
+        const namaPaket = targetPaketObj?.nama_paket || 'Paket Ujian';
+
+        // 1. Hapus HANYA hasil ujian untuk paket ini (PAKET LAIN TETAP AMAN)
+        const { error: errDel } = await supabase
+          .from('hasil')
+          .delete()
+          .eq('user_id', s.id)
+          .eq('paket_id', targetPaketId);
+
+        if (errDel) throw errDel;
+
+        // 2. Bersihkan sesi ujian siswa di tabel users
+        await supabase
+          .from('users')
+          .update({
+            status_ujian: 'Belum Ujian',
+            status_login: '0',
+            paket_aktif_id: null,
+            jawaban_sementara: {},
+            sisa_waktu: null
+          })
+          .eq('id', s.id);
+
+        alert(`✅ Ujian paket "${namaPaket}" untuk siswa ${s.nama} berhasil direset!\n\nSiswa sekarang dapat mengikuti ujian paket ini dari awal. Nilai ujian untuk paket lainnya tetap tersimpan aman.`);
+      } else {
+        // Mode 'all': Reset semua paket
+        const { error: errDel } = await supabase
+          .from('hasil')
+          .delete()
+          .eq('user_id', s.id);
+
+        if (errDel) throw errDel;
+
+        await supabase
+          .from('users')
+          .update({
+            status_ujian: 'Belum Ujian',
+            status_login: '0',
+            paket_aktif_id: null,
+            jawaban_sementara: {},
+            sisa_waktu: null
+          })
+          .eq('id', s.id);
+
+        alert(`✅ Seluruh hasil ujian untuk siswa ${s.nama} telah direset.`);
+      }
+
+      setModalResetUjian(prev => ({ ...prev, isOpen: false }));
       fetchData(false);
-    } catch (error) {
-      alert('Gagal mereset ujian.');
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal mereset ujian: ' + (error?.message || 'Terjadi kesalahan'));
+      setModalResetUjian(prev => ({ ...prev, isProcessing: false }));
     }
   };
 
@@ -779,9 +892,9 @@ export default function PantauSiswaPage() {
                             </button>
                           )}
                           <button 
-                            onClick={() => handleResetUjian(s.id, s.nama)}
+                            onClick={() => handleOpenResetUjian(s)}
                             className="text-xs bg-red-100 text-red-700 hover:bg-red-500 hover:text-white px-2.5 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95"
-                            title="Hapus hasil dan kembalikan status ke Belum Ujian"
+                            title="Reset ujian siswa untuk paket tertentu (nilai paket lain tetap aman)"
                           >
                             <Trash2 size={14} /> Reset Ujian
                           </button>
@@ -1413,6 +1526,219 @@ export default function PantauSiswaPage() {
                   <>
                     {modalWaktuMassal.tipeAksi === 'tambah' ? <Plus size={13} /> : <Minus size={13} />}
                     <span>{modalWaktuMassal.tipeAksi === 'tambah' ? `Terapkan Tambah ${modalWaktuMassal.menit} Menit` : `Terapkan Kurang ${modalWaktuMassal.menit} Menit`}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Reset Ujian Peserta (Spesifik Paket / Semua Paket) */}
+      {modalResetUjian.isOpen && modalResetUjian.siswa && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-rose-100">
+            {/* Header Modal */}
+            <div className="p-5 border-b border-rose-100 flex justify-between items-center bg-rose-50/80">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl text-white bg-rose-600 shadow-rose-600/20 shadow-md">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Reset Ujian Siswa
+                  </h3>
+                  <p className="text-xs text-rose-700 font-medium">
+                    Atur ulang pengerjaan ujian siswa secara aman per-paket
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalResetUjian(prev => ({ ...prev, isOpen: false, siswa: null }))}
+                disabled={modalResetUjian.isProcessing}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-rose-100 transition disabled:opacity-50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Isi Detail & Pilihan Paket */}
+            <div className="p-5 space-y-4 text-sm max-h-[75vh] overflow-y-auto custom-scrollbar">
+              {/* Ringkasan Siswa */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-500 uppercase">Nama Peserta:</span>
+                  <span className="font-black text-slate-800 text-sm">{modalResetUjian.siswa.nama}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-500 uppercase">Kelas / Username:</span>
+                  <span className="font-medium text-slate-700">{modalResetUjian.siswa.kelas?.nama_kelas || '-'} • <span className="font-mono text-indigo-600 font-bold">{modalResetUjian.siswa.username}</span></span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-500 uppercase">Status Saat Ini:</span>
+                  <span className="font-bold text-slate-800">{modalResetUjian.siswa.status_ujian || 'Belum Ujian'}</span>
+                </div>
+              </div>
+
+              {/* Mode Pilihan Reset: Spesifik Paket vs Semua Paket */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Pilih Lingkup Reset:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalResetUjian(prev => ({ ...prev, mode: 'single' }))}
+                    className={clsx(
+                      "p-3 rounded-xl border-2 text-left transition flex flex-col justify-between",
+                      modalResetUjian.mode === 'single'
+                        ? "border-indigo-600 bg-indigo-50/60 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck size={16} className={modalResetUjian.mode === 'single' ? "text-indigo-600" : "text-slate-400"} />
+                      <span className="font-black text-xs text-slate-800">1 Paket Tertentu</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 leading-tight">
+                      Hanya paket yang dipilih yang direset. Paket lain tetap <strong>AMAN</strong>.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setModalResetUjian(prev => ({ ...prev, mode: 'all' }))}
+                    className={clsx(
+                      "p-3 rounded-xl border-2 text-left transition flex flex-col justify-between",
+                      modalResetUjian.mode === 'all'
+                        ? "border-rose-600 bg-rose-50/60 shadow-sm"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle size={16} className={modalResetUjian.mode === 'all' ? "text-rose-600" : "text-slate-400"} />
+                      <span className="font-black text-xs text-rose-700">Semua Paket</span>
+                    </div>
+                    <span className="text-[11px] text-rose-600/80 leading-tight">
+                      Hapus seluruh nilai siswa di semua paket yang pernah ia kerjakan.
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Jika Mode Single: Dropdown Paket yang Ingin Direset */}
+              {modalResetUjian.mode === 'single' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Pilih Paket Ujian yang Ingin Direset:
+                    </label>
+                    <select
+                      value={modalResetUjian.paketId}
+                      onChange={(e) => setModalResetUjian(prev => ({ ...prev, paketId: e.target.value }))}
+                      className="w-full border-2 border-slate-200 rounded-xl p-3 text-xs md:text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition bg-white"
+                    >
+                      <option value="" disabled>-- Pilih Paket Ujian --</option>
+                      {paketList.map((p: any) => {
+                        const hasHasil = modalResetUjian.riwayatPaket.find((h: any) => h.paket_id === p.id);
+                        return (
+                          <option key={p.id} value={p.id}>
+                            {p.nama_paket} {hasHasil ? `(Sudah ada nilai: ${hasHasil.skor_akhir})` : ''} {p.status === 'Aktif' ? '• Aktif' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Ringkasan Status Nilai Paket Lain yang Tersimpan Aman */}
+                  {modalResetUjian.riwayatPaket.length > 0 && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-emerald-600" />
+                        Status Nilai Paket Siswa Ini:
+                      </p>
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                        {modalResetUjian.riwayatPaket.map((h: any) => {
+                          const isTarget = h.paket_id === modalResetUjian.paketId;
+                          const namaP = h.paket?.nama_paket || paketList.find(p => p.id === h.paket_id)?.nama_paket || 'Paket';
+                          return (
+                            <div 
+                              key={h.id} 
+                              className={clsx(
+                                "flex justify-between items-center text-xs px-2.5 py-1.5 rounded-lg border",
+                                isTarget 
+                                  ? "bg-rose-50 border-rose-200 text-rose-800 font-bold" 
+                                  : "bg-emerald-50/60 border-emerald-100 text-slate-700"
+                              )}
+                            >
+                              <span className="truncate pr-2">
+                                {isTarget ? '⚠️ (Akan Direset) ' : '🔒 '} {namaP}
+                              </span>
+                              <span className={clsx("font-black shrink-0 px-2 py-0.5 rounded text-[11px]", isTarget ? "bg-rose-200 text-rose-900" : "bg-emerald-100 text-emerald-800")}>
+                                Skor: {h.skor_akhir} {isTarget ? '→ Dihapus' : '→ Tetap Aman'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2 leading-relaxed">
+                    <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Perlindungan Nilai:</strong> Hanya riwayat ujian paket yang dipilih di atas yang akan dihapus. Nilai ujian untuk paket mata pelajaran lain tidak akan disentuh dan tetap tersimpan utuh di sistem.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Jika Mode All: Peringatan Bahaya */}
+              {modalResetUjian.mode === 'all' && (
+                <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-xl text-xs text-rose-900 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-sm text-rose-700">
+                    <AlertTriangle size={18} /> Peringatan Tindakan Berisiko Tinggi!
+                  </div>
+                  <p className="leading-relaxed">
+                    Tindakan ini akan <strong>menghapus SELURUH riwayat nilai ujian</strong> ({modalResetUjian.riwayatPaket.length} paket yang tercatat) untuk siswa <strong>{modalResetUjian.siswa.nama}</strong>. Data yang dihapus tidak dapat dipulihkan.
+                  </p>
+                  <p className="font-semibold text-rose-800">
+                    Gunakan opsi ini hanya jika siswa ingin mengulang seluruh ujian dari awal secara menyeluruh.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalResetUjian(prev => ({ ...prev, isOpen: false, siswa: null }))}
+                disabled={modalResetUjian.isProcessing}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteResetUjian}
+                disabled={modalResetUjian.isProcessing || (modalResetUjian.mode === 'single' && !modalResetUjian.paketId)}
+                className={clsx(
+                  "px-5 py-2 text-xs font-black text-white rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer",
+                  modalResetUjian.mode === 'single'
+                    ? "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20"
+                    : "bg-red-700 hover:bg-red-800 shadow-red-700/30 ring-2 ring-red-400"
+                )}
+              >
+                {modalResetUjian.isProcessing ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Memproses Reset...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>{modalResetUjian.mode === 'single' ? 'Reset Paket Ini Sekarang' : 'Reset Seluruh Paket'}</span>
                   </>
                 )}
               </button>
