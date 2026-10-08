@@ -144,15 +144,46 @@ export default function TokenPage() {
         return;
       }
 
-      const isResuming = user.paket_aktif_id === selectedPaket && user.status_ujian === 'Mengerjakan Ujian';
+      // 1. Ambil data terbaru siswa dari database agar status_ujian & sisa_waktu tidak stale
+      const { data: freshUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const currentUser = freshUser || user;
+      const durasiPaketDetik = (paket.durasi_menit || 60) * 60;
+
+      // Siswa hanya dianggap 'melanjutkan' jika memang sedang mengerjakan paket yang SAMA
+      // dan memiliki sisa waktu valid yang tidak melampaui batas wajar durasi paket
+      const isResuming = 
+        currentUser.paket_aktif_id === selectedPaket && 
+        currentUser.status_ujian === 'Mengerjakan Ujian' &&
+        currentUser.sisa_waktu &&
+        currentUser.sisa_waktu > 0 &&
+        currentUser.sisa_waktu <= (durasiPaketDetik + 1800);
+
       const userUpdate: any = { 
         status_ujian: 'Mengerjakan Ujian', 
         status_login: '1',
         paket_aktif_id: selectedPaket
       };
+
       if (!isResuming) {
-        userUpdate.sisa_waktu = paket.durasi_menit * 60;
+        // SISWA BARU MULAI ATAU BARU DIRESET: Set sisa waktu tepat ke durasi paket penuh!
+        userUpdate.sisa_waktu = durasiPaketDetik;
         userUpdate.jawaban_sementara = {};
+
+        // Bersihkan seluruh cache timer & jawaban lama di browser ini untuk paket tersebut
+        localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
+        localStorage.removeItem(`cbt_jawaban_${user.id}_${paket.id}`);
+        localStorage.removeItem(`cbt_ragu_${user.id}_${paket.id}`);
+        localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
+        // Setel timer awal di localStorage tepat sama dengan durasi paket
+        localStorage.setItem(`cbt_timer_${user.id}_${paket.id}`, durasiPaketDetik.toString());
+      } else {
+        userUpdate.sisa_waktu = currentUser.sisa_waktu;
+        localStorage.setItem(`cbt_timer_${user.id}_${paket.id}`, currentUser.sisa_waktu.toString());
       }
 
       const { error: updateError } = await supabase
@@ -162,6 +193,9 @@ export default function TokenPage() {
 
       if (updateError) throw updateError;
 
+      // Simpan user terbaru ke localStorage agar tidak membawa sisa_waktu usang
+      const updatedUserObj = { ...currentUser, ...userUpdate };
+      localStorage.setItem('cbt_user', JSON.stringify(updatedUserObj));
       localStorage.setItem('cbt_paket', JSON.stringify(paket));
       await supabase.from('log').insert({ user_id: user.id, aktivitas: `Mulai Ujian Paket: ${paket.nama_paket}` });
 

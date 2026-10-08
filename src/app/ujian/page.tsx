@@ -788,7 +788,8 @@ export default function UjianPage() {
     pesan: string;
     waktuBaru?: number;
   } | null>(null);
-  const lastMassTimeId = useRef<number>(0);
+  // Inisialisasi dengan timestamp saat ini agar broadcast lama sebelum siswa masuk tidak memengaruhi waktu ujian baru
+  const lastMassTimeId = useRef<number>(Date.now());
 
   // Pengaturan Tampil Nilai & Mode Review Jawaban
   const [tampilNilai, setTampilNilai] = useState('ON');
@@ -1023,14 +1024,36 @@ export default function UjianPage() {
       } catch (e) {}
     }
 
+    const durasiPaketDetik = (p.durasi_menit || 60) * 60;
+    const timerKey = `cbt_timer_${u.id}_${p.id}`;
+    const savedTimer = localStorage.getItem(timerKey);
+    let waktuAwal = durasiPaketDetik;
+
+    if (savedTimer) {
+      const parsed = parseInt(savedTimer, 10);
+      // Validasi ketat: sisa waktu harus > 0 dan tidak boleh melebihi durasi paket (+ toleransi penambahan wajar)
+      if (parsed > 0 && parsed <= durasiPaketDetik + 1800) {
+        waktuAwal = parsed;
+      } else {
+        waktuAwal = durasiPaketDetik;
+        localStorage.setItem(timerKey, durasiPaketDetik.toString());
+      }
+    } else {
+      localStorage.setItem(timerKey, durasiPaketDetik.toString());
+    }
+
+    setSisaWaktu(waktuAwal);
+
     // Ambil jawaban sementara & sisa waktu terbaru dari database server jika ada
     supabase
       .from('users')
-      .select('jawaban_sementara, sisa_waktu')
+      .select('jawaban_sementara, sisa_waktu, paket_aktif_id, status_ujian')
       .eq('id', u.id)
       .maybeSingle()
       .then(({ data: dbUser }) => {
-        if (dbUser?.jawaban_sementara && Object.keys(dbUser.jawaban_sementara).length > 0) {
+        if (!dbUser) return;
+
+        if (dbUser.jawaban_sementara && Object.keys(dbUser.jawaban_sementara).length > 0) {
           setJawaban(prev => {
             const merged = { ...dbUser.jawaban_sementara, ...prev };
             try {
@@ -1039,28 +1062,27 @@ export default function UjianPage() {
             return merged;
           });
         }
-        // Jika siswa pindah komputer setelah lowbatt/kendala, pulihkan sisa waktu dari database
-        if (dbUser?.sisa_waktu && dbUser.sisa_waktu > 0 && !localStorage.getItem(timerKey)) {
-          setSisaWaktu(dbUser.sisa_waktu);
-          localStorage.setItem(timerKey, dbUser.sisa_waktu.toString());
+        
+        // HANYA pulihkan sisa waktu dari database jika siswa sedang mengerjakan paket yang SAMA
+        // dan pindah komputer setelah kendala (tidak ada timer lokal valid di browser ini)
+        if (
+          dbUser.paket_aktif_id === p.id && 
+          dbUser.status_ujian === 'Mengerjakan Ujian' &&
+          dbUser.sisa_waktu && 
+          dbUser.sisa_waktu > 0 && 
+          dbUser.sisa_waktu <= durasiPaketDetik + 1800
+        ) {
+          const currentLocal = localStorage.getItem(timerKey);
+          if (!currentLocal) {
+            setSisaWaktu(dbUser.sisa_waktu);
+            localStorage.setItem(timerKey, dbUser.sisa_waktu.toString());
+          }
         }
       });
     
     const rguKey = `cbt_ragu_${u.id}_${p.id}`;
     const savedRgu = localStorage.getItem(rguKey);
     if (savedRgu) setRagu(JSON.parse(savedRgu));
-    
-    const timerKey = `cbt_timer_${u.id}_${p.id}`;
-    const savedTimer = localStorage.getItem(timerKey);
-    if (savedTimer) {
-      setSisaWaktu(parseInt(savedTimer, 10));
-    } else if (u.sisa_waktu && u.sisa_waktu > 0) {
-      // JEDA KENDALA / LOWBATT: Menggunakan sisa waktu tersimpan di akun siswa
-      setSisaWaktu(u.sisa_waktu);
-      localStorage.setItem(timerKey, u.sisa_waktu.toString());
-    } else {
-      setSisaWaktu((p.durasi_menit || 60) * 60);
-    }
 
     // Cek jika dibuka dalam mode review (?review=1)
     if (typeof window !== 'undefined' && window.location.search.includes('review=1')) {
@@ -1719,8 +1741,19 @@ export default function UjianPage() {
         throw errHasil;
       }
 
-      await supabase.from('users').update({ status_ujian: 'Selesai', status_login: '0', jawaban_sementara: {} }).eq('id', user.id);
+      await supabase.from('users').update({ 
+        status_ujian: 'Selesai', 
+        status_login: '0', 
+        jawaban_sementara: {},
+        sisa_waktu: null,
+        paket_aktif_id: null
+      }).eq('id', user.id);
       
+      try {
+        const curU = JSON.parse(localStorage.getItem('cbt_user') || '{}');
+        localStorage.setItem('cbt_user', JSON.stringify({ ...curU, status_ujian: 'Selesai', sisa_waktu: null, paket_aktif_id: null }));
+      } catch (e) {}
+
       localStorage.removeItem('cbt_paket');
       localStorage.removeItem(`cbt_timer_${user.id}_${paket.id}`);
       localStorage.removeItem(`cbt_cheat_${user.id}_${paket.id}`);
