@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    let { paket_id, hasil_id, provider } = await req.json();
+    let { paket_id, hasil_id, hasil_ids, provider } = await req.json();
 
     if (!paket_id && !hasil_id) {
       return NextResponse.json({ error: 'ID Paket atau ID Hasil tidak valid.' }, { status: 400 });
@@ -55,6 +55,14 @@ export async function POST(req: Request) {
     let hasilList: any[] = [];
     if (singleHasil) {
       hasilList = [singleHasil];
+    } else if (Array.isArray(hasil_ids) && hasil_ids.length > 0) {
+      // Koreksi hanya untuk siswa yang dipilih
+      const { data: hList, error: errHasil } = await supabase
+        .from('hasil')
+        .select('*')
+        .in('id', hasil_ids);
+      if (errHasil) throw errHasil;
+      hasilList = hList || [];
     } else {
       const { data: hList, error: errHasil } = await supabase
         .from('hasil')

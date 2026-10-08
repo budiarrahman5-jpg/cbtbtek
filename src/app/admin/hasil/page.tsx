@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X, Image as ImageIcon, Upload, CheckCircle2, Clock } from 'lucide-react';
+import { Trophy, Download, Search, Calculator, Sparkles, CheckSquare, Trash2, RefreshCw, Printer, FileText, X, Image as ImageIcon, Upload, CheckCircle2, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function HasilUjianPage() {
@@ -29,6 +29,9 @@ export default function HasilUjianPage() {
   // State Seleksi Siswa & Ubah Status Koreksi Massal
   const [selectedHasilIds, setSelectedHasilIds] = useState<string[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // State Sort Tabel
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   
   // State Cetak PDF (Pilihan Kop Resmi vs Tanpa Kop)
   const [modalPrintPDF, setModalPrintPDF] = useState(false);
@@ -459,9 +462,59 @@ export default function HasilUjianPage() {
     setIsLoading(false);
   };
 
-  const filteredHasil = hasil.filter(h => 
-    h.users?.nama?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredHasil = (() => {
+    const filtered = hasil.filter(h =>
+      h.users?.nama?.toLowerCase().includes(search.toLowerCase())
+    );
+    if (!sortConfig) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      if (sortConfig.key === 'nama') {
+        aVal = a.users?.nama?.toLowerCase() || '';
+        bVal = b.users?.nama?.toLowerCase() || '';
+      } else if (sortConfig.key === 'kelas') {
+        aVal = kelasList.find((k: any) => k.id === a.users?.kelas_id)?.nama_kelas?.toLowerCase() || '';
+        bVal = kelasList.find((k: any) => k.id === b.users?.kelas_id)?.nama_kelas?.toLowerCase() || '';
+      } else if (sortConfig.key === 'paket') {
+        aVal = a.paket?.nama_paket?.toLowerCase() || '';
+        bVal = b.paket?.nama_paket?.toLowerCase() || '';
+      } else if (sortConfig.key === 'skor') {
+        aVal = a.skor_akhir ?? 0;
+        bVal = b.skor_akhir ?? 0;
+      } else if (sortConfig.key === 'cheat') {
+        aVal = a.cheat_count ?? 0;
+        bVal = b.cheat_count ?? 0;
+      } else if (sortConfig.key === 'status') {
+        aVal = a.status_koreksi || '';
+        bVal = b.status_koreksi || '';
+      } else {
+        return 0;
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  })();
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => {
+      if (prev?.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
+  const SortIcon = ({ col }: { col: string }) => {
+    if (sortConfig?.key !== col) return <ArrowUpDown size={13} className="text-gray-400 ml-1 inline" />;
+    return sortConfig.direction === 'asc'
+      ? <ArrowUp size={13} className="text-indigo-600 ml-1 inline" />
+      : <ArrowDown size={13} className="text-indigo-600 ml-1 inline" />;
+  };
 
   const handleToggleSelect = (id: string) => {
     setSelectedHasilIds(prev => 
@@ -525,10 +578,16 @@ export default function HasilUjianPage() {
     setIsAILoading(true);
     setShowKoreksiPaketModal(false);
     try {
+      const body: any = { paket_id: selectedPaket, provider: engine };
+      // Jika ada siswa yang dipilih, kirim ID mereka saja
+      if (selectedHasilIds.length > 0) {
+        body.hasil_ids = selectedHasilIds;
+      }
+
       const res = await fetch('/api/gemini/grade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paket_id: selectedPaket, provider: engine })
+        body: JSON.stringify(body)
       });
       
       const data = await res.json();
@@ -998,13 +1057,37 @@ export default function HasilUjianPage() {
                     title="Pilih Semua Siswa"
                   />
                 </th>
-                <th className="p-3 font-semibold">Nama Siswa</th>
-                <th className="p-3 font-semibold">Kelas</th>
-                <th className="p-3 font-semibold">Paket Ujian</th>
-                <th className="p-3 font-semibold text-center">Nilai (Skor Akhir)</th>
-                <th className="p-3 font-semibold text-center">Cheat Count</th>
+                <th className="p-3 font-semibold">
+                  <button onClick={() => handleSort('nama')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold">
+                    Nama Siswa<SortIcon col="nama" />
+                  </button>
+                </th>
+                <th className="p-3 font-semibold">
+                  <button onClick={() => handleSort('kelas')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold">
+                    Kelas<SortIcon col="kelas" />
+                  </button>
+                </th>
+                <th className="p-3 font-semibold">
+                  <button onClick={() => handleSort('paket')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold">
+                    Paket Ujian<SortIcon col="paket" />
+                  </button>
+                </th>
+                <th className="p-3 font-semibold text-center">
+                  <button onClick={() => handleSort('skor')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold mx-auto">
+                    Nilai (Skor Akhir)<SortIcon col="skor" />
+                  </button>
+                </th>
+                <th className="p-3 font-semibold text-center">
+                  <button onClick={() => handleSort('cheat')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold mx-auto">
+                    Cheat Count<SortIcon col="cheat" />
+                  </button>
+                </th>
                 <th className="p-3 font-semibold text-center">Waktu Sisa</th>
-                <th className="p-3 font-semibold text-center">Status Koreksi</th>
+                <th className="p-3 font-semibold text-center">
+                  <button onClick={() => handleSort('status')} className="flex items-center gap-0.5 hover:text-indigo-700 transition-colors font-semibold mx-auto">
+                    Status Koreksi<SortIcon col="status" />
+                  </button>
+                </th>
                 <th className="p-3 font-semibold text-center">Aksi</th>
               </tr>
             </thead>
@@ -1646,6 +1729,29 @@ export default function HasilUjianPage() {
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
               AI akan menilai seluruh jawaban essay/isian siswa pada paket <strong>{paketList.find(p => p.id === selectedPaket)?.nama_paket || 'yang dipilih'}</strong> secara otomatis dan proporsional.
             </p>
+
+            {/* Peringatan Seleksi Siswa */}
+            {selectedHasilIds.length === 0 ? (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl p-3.5 mb-4">
+                <span className="text-amber-500 text-lg mt-0.5 shrink-0">⚠️</span>
+                <div>
+                  <p className="text-xs font-bold text-amber-800 mb-0.5">Belum ada siswa yang ditandai!</p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    AI akan mengkoreksi <strong>seluruh siswa</strong> pada paket ini. Jika ingin mengkoreksi siswa tertentu saja, tutup modal ini lalu <strong>centang siswa yang diinginkan</strong> pada tabel terlebih dahulu.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3.5 mb-4">
+                <span className="text-indigo-500 text-lg mt-0.5 shrink-0">✅</span>
+                <div>
+                  <p className="text-xs font-bold text-indigo-800 mb-0.5">{selectedHasilIds.length} siswa siap dikoreksi</p>
+                  <p className="text-[11px] text-indigo-700 leading-relaxed">
+                    AI hanya akan mengkoreksi <strong>{selectedHasilIds.length} siswa yang sudah Anda tandai</strong> sebelumnya.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="mb-5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
