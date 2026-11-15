@@ -61,7 +61,10 @@ export default function Home() {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!username || !password) {
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanUsername || !cleanPassword) {
       setErrorMsg('Username dan Password wajib diisi!');
       return;
     }
@@ -72,17 +75,24 @@ export default function Home() {
       const { data, error } = await supabase
         .from('users')
         .select('*, kelas(nama_kelas)')
-        .eq('username', username)
-        .eq('password', password)
-        .single();
+        .ilike('username', cleanUsername)
+        .eq('password', cleanPassword)
+        .maybeSingle();
 
-      if (error || !data) {
-        setErrorMsg('Username atau Password salah!');
+      if (error) {
+        console.error('Database connection / login error:', error);
+        setErrorMsg(`Gagal terhubung ke database: ${error.message || 'Periksa koneksi Supabase'}`);
         setIsLoading(false);
         return;
       }
 
-      if (data.username.startsWith('demo_')) {
+      if (!data) {
+        setErrorMsg('Username atau Password salah! Periksa kembali huruf besar/kecil dan pastikan tidak ada spasi.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (data.username?.startsWith('demo_')) {
         const createdAt = new Date(data.created_at);
         const now = new Date();
         const diffTime = Math.abs(now.getTime() - createdAt.getTime());
@@ -94,27 +104,33 @@ export default function Home() {
         }
       }
 
+      const roleUser = (data.role || 'siswa').toLowerCase();
+
       // Proteksi login ganda (status_login === '1') hanya berlaku untuk siswa
-      if (data.role?.toLowerCase() !== 'admin' && data.status_login === '1') {
+      if (roleUser !== 'admin' && data.status_login === '1') {
         setErrorMsg('Akun sedang aktif di perangkat lain! Hubungi pengawas.');
         setIsLoading(false);
         return;
       }
 
-      await supabase.from('users').update({ status_login: '1' }).eq('id', data.id);
-      await supabase.from('log').insert({ user_id: data.id, aktivitas: 'Login Aplikasi' });
+      try {
+        await supabase.from('users').update({ status_login: '1' }).eq('id', data.id);
+        await supabase.from('log').insert({ user_id: data.id, aktivitas: 'Login Aplikasi' });
+      } catch (e) {
+        console.warn('Gagal mencatat status_login/log:', e);
+      }
 
       localStorage.setItem('cbt_user', JSON.stringify(data));
       
-      if (data.role.toLowerCase() === 'admin') {
+      if (roleUser === 'admin') {
         router.push('/admin');
       } else {
         router.push('/token');
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg('Terjadi kesalahan pada server.');
+      setErrorMsg(`Terjadi kesalahan sistem: ${err?.message || 'Gagal memproses login'}`);
     } finally {
       setIsLoading(false);
     }
