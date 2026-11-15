@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen, Sparkles, Camera, Upload, Check, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, CheckCircle2, Printer, CreditCard, Eye, EyeOff, SlidersHorizontal, Image as ImageIcon } from 'lucide-react';
+import { UserPlus, Search, Edit, Trash2, Plus, Users, BookOpen, Sparkles, Camera, Upload, Check, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, CheckCircle2, Printer, CreditCard, Eye, EyeOff, SlidersHorizontal, Image as ImageIcon, Zap } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function KelolaSiswaPage() {
@@ -55,6 +55,25 @@ export default function KelolaSiswaPage() {
     tempFoto: ''
   });
   const [isSavingFoto, setIsSavingFoto] = useState(false);
+
+  // State Modal Generator Akun Tryout Anonim
+  const [modalTryout, setModalTryout] = useState<{
+    isOpen: boolean;
+    jumlah: number;
+    kelasId: string;
+    namaKelasBaru: string;
+    prefix: string;
+    passwordDefault: string;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    jumlah: 30,
+    kelasId: '',
+    namaKelasBaru: '',
+    prefix: 'to',
+    passwordDefault: '123456',
+    isProcessing: false,
+  });
 
   // Helper Kompresi Foto Siswa (Pas Foto 2x3 Ringan & Tajam)
   const compressImage = (file: File, maxWidth = 240, maxHeight = 320): Promise<string> => {
@@ -510,6 +529,124 @@ export default function KelolaSiswaPage() {
     }
   };
 
+  const handleGenerateTryout = async () => {
+    if (isDemo) { alert('Fitur dinonaktifkan untuk Akun Demo.'); return; }
+    
+    const jumlah = Number(modalTryout.jumlah);
+    if (!jumlah || jumlah < 1 || jumlah > 500) {
+      alert('Jumlah akun harus antara 1 sampai 500.');
+      return;
+    }
+
+    const cleanPrefix = (modalTryout.prefix || 'to').trim().toLowerCase();
+    const cleanPassword = (modalTryout.passwordDefault || '123456').trim();
+    if (!cleanPassword) {
+      alert('Password default tidak boleh kosong.');
+      return;
+    }
+
+    setModalTryout(prev => ({ ...prev, isProcessing: true }));
+
+    try {
+      let targetKelasId = modalTryout.kelasId;
+
+      // Jika mengisi nama kelas baru
+      if (modalTryout.namaKelasBaru.trim()) {
+        const namaBaruClean = modalTryout.namaKelasBaru.trim().toUpperCase();
+        const existingKls = kelas.find(k => k.nama_kelas.toUpperCase() === namaBaruClean);
+        if (existingKls) {
+          targetKelasId = existingKls.id;
+        } else {
+          const { data: newKls, error: errKls } = await supabase
+            .from('kelas')
+            .insert({ nama_kelas: namaBaruClean })
+            .select()
+            .single();
+
+          if (errKls || !newKls) {
+            throw new Error(`Gagal membuat kelas baru: ${errKls?.message || ''}`);
+          }
+          targetKelasId = newKls.id;
+          setKelas(prev => [...prev, newKls]);
+        }
+      }
+
+      // Jika belum ada kelas yang dipilih sama sekali, buat atau gunakan kelas default "TRYOUT"
+      if (!targetKelasId) {
+        let toKls = kelas.find(k => k.nama_kelas.toUpperCase() === 'TRYOUT');
+        if (!toKls) {
+          const { data: newToKls, error: errToKls } = await supabase
+            .from('kelas')
+            .insert({ nama_kelas: 'TRYOUT' })
+            .select()
+            .single();
+          if (!errToKls && newToKls) {
+            targetKelasId = newToKls.id;
+            setKelas(prev => [...prev, newToKls]);
+          }
+        } else {
+          targetKelasId = toKls.id;
+        }
+      }
+
+      // Deteksi nomor urut terakhir dari username yang sudah ada dengan prefix ini
+      let maxNum = 0;
+      siswa.forEach(s => {
+        const u = (s.username || '').toLowerCase();
+        if (u.startsWith(cleanPrefix)) {
+          const suffix = u.slice(cleanPrefix.length);
+          const parsed = parseInt(suffix, 10);
+          if (!isNaN(parsed) && parsed > maxNum) {
+            maxNum = parsed;
+          }
+        }
+      });
+
+      const startNumber = maxNum + 1;
+      const totalAkun = startNumber + jumlah - 1;
+      const padLen = Math.max(2, String(totalAkun).length);
+
+      const records = [];
+      for (let i = 0; i < jumlah; i++) {
+        const currentNum = startNumber + i;
+        const padStr = String(currentNum).padStart(padLen, '0');
+        const usr = `${cleanPrefix}${padStr}`;
+        const nm = `Peserta Tryout ${padStr}`;
+
+        records.push({
+          username: usr,
+          password: cleanPassword,
+          nama: nm,
+          kelas_id: targetKelasId,
+          role: 'siswa'
+        });
+      }
+
+      const { error: errInsert } = await supabase.from('users').insert(records);
+      if (errInsert) {
+        throw new Error(errInsert.message || 'Gagal menyimpan akun ke database.');
+      }
+
+      alert(`Sukses! ${records.length} akun tryout berhasil dibuat:\nUsername: ${records[0].username} s/d ${records[records.length - 1].username}\nPassword: ${cleanPassword}\n\nAnda dapat langsung mencetak kartu ujian di tombol 'Cetak Kartu Ujian (A4)'.`);
+      
+      setModalTryout({
+        isOpen: false,
+        jumlah: 30,
+        kelasId: '',
+        namaKelasBaru: '',
+        prefix: 'to',
+        passwordDefault: '123456',
+        isProcessing: false,
+      });
+
+      fetchData();
+    } catch (err: any) {
+      alert(`Terjadi kesalahan: ${err.message || 'Gagal meng-generate akun tryout'}`);
+    } finally {
+      setModalTryout(prev => ({ ...prev, isProcessing: false }));
+    }
+  };
+
   const handleCetakKartu = () => {
     const cardSheets = document.querySelectorAll('.a4-sheet-card');
     if (!cardSheets || cardSheets.length === 0) {
@@ -739,6 +876,14 @@ export default function KelolaSiswaPage() {
               >
                 <Sparkles size={14} className="text-amber-300" />
                 Scan Absensi (Gemini AI)
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTryout(prev => ({ ...prev, isOpen: true }))}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all border bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 flex items-center gap-1.5 shadow-sm active:scale-95"
+              >
+                <Zap size={14} className="text-amber-600" />
+                Akun Tryout
               </button>
             </div>
           </div>
@@ -1209,6 +1354,14 @@ export default function KelolaSiswaPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <button
+              onClick={() => setModalTryout(prev => ({ ...prev, isOpen: true }))}
+              className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black px-4 py-2.5 rounded-xl shadow-md shadow-orange-500/20 text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <Zap size={16} />
+              <span>⚡ Generate Akun Tryout</span>
+            </button>
+
             <button
               onClick={() => {
                 setFilterKelasKartu('ALL');
@@ -1821,6 +1974,136 @@ export default function KelolaSiswaPage() {
                   </div>
                 ));
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GENERATE AKUN TRYOUT ANONIM */}
+      {modalTryout.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-lg p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => !modalTryout.isProcessing && setModalTryout(prev => ({ ...prev, isOpen: false }))}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-all"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-md shadow-orange-500/30">
+                <Zap size={22} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-800">Generate Akun Tryout</h3>
+                <p className="text-xs text-slate-500">Buat akun anonim massal tanpa perlu nama siswa diawal</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-5 leading-relaxed">
+              💡 <strong>Cara Kerja Tryout:</strong> Akun anonim (contoh: <code>to01</code>, <code>to02</code>) akan dibuat otomatis. Saat peserta login untuk ujian, mereka akan <strong>diminta mengisi Nama Lengkap secara mandiri</strong> sebelum token diinput.
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Jumlah Akun Siswa</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={modalTryout.jumlah}
+                    onChange={e => setModalTryout(prev => ({ ...prev, jumlah: parseInt(e.target.value) || 0 }))}
+                    className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10"
+                    placeholder="30"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Prefix Username</label>
+                  <input
+                    type="text"
+                    value={modalTryout.prefix}
+                    onChange={e => setModalTryout(prev => ({ ...prev, prefix: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
+                    className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-sm font-bold font-mono text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10"
+                    placeholder="to"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Password Default untuk Semua Akun</label>
+                <input
+                  type="text"
+                  value={modalTryout.passwordDefault}
+                  onChange={e => setModalTryout(prev => ({ ...prev, passwordDefault: e.target.value }))}
+                  className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-sm font-mono font-bold text-slate-800 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10"
+                  placeholder="123456"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">Pilih Kelas yang Ada</label>
+                <select
+                  value={modalTryout.kelasId}
+                  onChange={e => setModalTryout(prev => ({ ...prev, kelasId: e.target.value }))}
+                  className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 bg-white"
+                >
+                  <option value="">-- Buat / Ketik Kelas Baru di Bawah --</option>
+                  {kelas.map(k => (
+                    <option key={k.id} value={k.id}>{k.nama_kelas}</option>
+                  ))}
+                </select>
+              </div>
+
+              {!modalTryout.kelasId && (
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">Atau Nama Kelas Baru (Opsional)</label>
+                  <input
+                    type="text"
+                    value={modalTryout.namaKelasBaru}
+                    onChange={e => setModalTryout(prev => ({ ...prev, namaKelasBaru: e.target.value }))}
+                    className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-xs font-bold uppercase text-slate-800 outline-none focus:border-amber-500 placeholder:normal-case placeholder:font-normal"
+                    placeholder="Misal: TRYOUT AKBAR 2026 (Default: TRYOUT)"
+                  />
+                </div>
+              )}
+
+              {/* Preview Box */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
+                <span className="font-bold text-slate-700 block mb-1">Pratinjau Akun:</span>
+                <p>Username: <span className="font-mono font-bold text-indigo-700">{modalTryout.prefix || 'to'}01</span> s/d <span className="font-mono font-bold text-indigo-700">{modalTryout.prefix || 'to'}{String(modalTryout.jumlah || 30).padStart(2, '0')}</span></p>
+                <p className="mt-0.5">Password: <span className="font-mono font-bold text-slate-800">{modalTryout.passwordDefault || '123456'}</span></p>
+                <p className="mt-0.5">Nama Awal: <span className="italic text-slate-500">Peserta Tryout 01, Peserta Tryout 02, ...</span></p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={modalTryout.isProcessing}
+                onClick={() => setModalTryout(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={modalTryout.isProcessing}
+                onClick={handleGenerateTryout}
+                className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-md shadow-orange-500/30 text-xs flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {modalTryout.isProcessing ? (
+                  <>
+                    <RefreshCw size={15} className="animate-spin" />
+                    <span>Sedang Membuat Akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={15} />
+                    <span>⚡ Buat {modalTryout.jumlah || 0} Akun Sekarang</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

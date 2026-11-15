@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { filterDemoData } from '@/lib/demo-filter';
-import { Info, LogOut, PackageSearch, KeySquare, PlayCircle } from 'lucide-react';
+import { Info, LogOut, PackageSearch, KeySquare, PlayCircle, Edit3, UserCheck, X, AlertCircle } from 'lucide-react';
 
 export default function TokenPage() {
   const [user, setUser] = useState<any>(null);
@@ -16,6 +16,16 @@ export default function TokenPage() {
   const [appName, setAppName] = useState('CBT B-TEK');
   const [appLogo, setAppLogo] = useState('/logo.png');
   const router = useRouter();
+
+  // State Identitas Mandiri Tryout (Konsep 2)
+  const [modalTryoutIdentitas, setModalTryoutIdentitas] = useState({
+    isOpen: false,
+    namaLengkap: '',
+    asalSekolah: '', // Opsional
+    kelasAsli: '',   // Opsional
+    isSaving: false,
+    error: '',
+  });
 
   const updateFavicon = (url: string) => {
     if (typeof document === 'undefined') return;
@@ -65,9 +75,65 @@ export default function TokenPage() {
       return;
     }
     
-    setUser(JSON.parse(savedUser));
+    const parsedUser = JSON.parse(savedUser);
+    setUser(parsedUser);
     fetchPaketAktif();
+
+    // Jika akun tryout belum diisi nama (masih default 'Peserta Tryout XX'), buka modal otomatis
+    if (parsedUser.nama?.toLowerCase().startsWith('peserta tryout')) {
+      setModalTryoutIdentitas(prev => ({
+        ...prev,
+        isOpen: true,
+        namaLengkap: '',
+      }));
+    }
   }, [router]);
+
+  const handleSaveTryoutIdentitas = async () => {
+    if (!modalTryoutIdentitas.namaLengkap.trim()) {
+      setModalTryoutIdentitas(prev => ({ ...prev, error: 'Nama Lengkap wajib diisi!' }));
+      return;
+    }
+
+    setModalTryoutIdentitas(prev => ({ ...prev, isSaving: true, error: '' }));
+
+    try {
+      const cleanNama = modalTryoutIdentitas.namaLengkap.trim();
+      const cleanSekolah = modalTryoutIdentitas.asalSekolah.trim();
+      const cleanKelas = modalTryoutIdentitas.kelasAsli.trim();
+
+      // Format nama: jika asal sekolah / kelas diisi (opsional), tambahkan di dalam kurung
+      let finalNama = cleanNama;
+      if (cleanSekolah && cleanKelas) {
+        finalNama = `${cleanNama} (${cleanSekolah} - ${cleanKelas})`;
+      } else if (cleanSekolah) {
+        finalNama = `${cleanNama} (${cleanSekolah})`;
+      } else if (cleanKelas) {
+        finalNama = `${cleanNama} (${cleanKelas})`;
+      }
+
+      // Update di Supabase table 'users'
+      const { error: errUpdate } = await supabase
+        .from('users')
+        .update({ nama: finalNama })
+        .eq('id', user.id);
+
+      if (errUpdate) throw errUpdate;
+
+      // Update state user & localStorage
+      const updatedUser = { ...user, nama: finalNama };
+      setUser(updatedUser);
+      localStorage.setItem('cbt_user', JSON.stringify(updatedUser));
+
+      setModalTryoutIdentitas(prev => ({ ...prev, isOpen: false, isSaving: false }));
+    } catch (err: any) {
+      setModalTryoutIdentitas(prev => ({
+        ...prev,
+        isSaving: false,
+        error: err.message || 'Gagal menyimpan identitas. Silakan coba lagi.'
+      }));
+    }
+  };
 
   const fetchPaketAktif = async () => {
     let { data, error } = await supabase
@@ -83,6 +149,11 @@ export default function TokenPage() {
 
   const handleMulaiUjian = async () => {
     setErrorMsg('');
+    if (user?.nama?.toLowerCase().startsWith('peserta tryout')) {
+      setErrorMsg('Harap lengkapi Nama Lengkap Anda terlebih dahulu sebelum memulai ujian!');
+      setModalTryoutIdentitas(prev => ({ ...prev, isOpen: true }));
+      return;
+    }
     if (!selectedPaket) {
       setErrorMsg('Silakan pilih paket soal terlebih dahulu!');
       return;
@@ -252,7 +323,25 @@ export default function TokenPage() {
         
         <div className="flex flex-col md:flex-row gap-6 mb-8 bg-slate-50 p-6 rounded-xl border border-slate-200/60">
            <div className="flex-1">
-             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Peserta Ujian</p>
+             <div className="flex items-center justify-between mb-1">
+               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Peserta Ujian</p>
+               <button
+                 type="button"
+                 onClick={() => setModalTryoutIdentitas({
+                   isOpen: true,
+                   namaLengkap: user.nama?.toLowerCase().startsWith('peserta tryout') ? '' : user.nama || '',
+                   asalSekolah: '',
+                   kelasAsli: '',
+                   isSaving: false,
+                   error: ''
+                 })}
+                 className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 hover:underline"
+                 title="Klik untuk mengubah nama peserta"
+               >
+                 <Edit3 size={13} />
+                 <span>{user.nama?.toLowerCase().startsWith('peserta tryout') ? 'Isi Nama Lengkap' : 'Ubah Nama'}</span>
+               </button>
+             </div>
              <p className="text-lg md:text-xl font-bold text-slate-800 uppercase">{user.nama}</p>
              <div className="flex items-center gap-2 mt-2">
                <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-bold border border-indigo-200">
@@ -349,6 +438,119 @@ export default function TokenPage() {
           )}
         </div>
       </div>
+
+      {/* MODAL INPUT IDENTITAS PESERTA TRYOUT (KONSEP 2) */}
+      {modalTryoutIdentitas.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            {/* Tombol X hanya bisa ditutup jika siswa bukan lagi berstatus default 'Peserta Tryout XX' */}
+            {!user.nama?.toLowerCase().startsWith('peserta tryout') && (
+              <button
+                type="button"
+                onClick={() => setModalTryoutIdentitas(prev => ({ ...prev, isOpen: false }))}
+                className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-all"
+              >
+                <X size={20} />
+              </button>
+            )}
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-md shadow-indigo-500/30">
+                <UserCheck size={22} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-800">Identitas Peserta Ujian</h3>
+                <p className="text-xs text-slate-500">Nama akan dicantumkan pada rekap hasil ujian</p>
+              </div>
+            </div>
+
+            {modalTryoutIdentitas.error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl text-xs font-bold mb-4 flex items-center gap-2">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>{modalTryoutIdentitas.error}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Nama Lengkap Siswa <span className="text-red-500">* (Wajib)</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={modalTryoutIdentitas.namaLengkap}
+                  onChange={e => setModalTryoutIdentitas(prev => ({ ...prev, namaLengkap: e.target.value, error: '' }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveTryoutIdentitas();
+                  }}
+                  className="w-full border-2 border-slate-200 p-3 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:font-normal placeholder:text-slate-400 uppercase"
+                  placeholder="Ketik Nama Lengkap Anda..."
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-bold text-slate-700">Asal Sekolah</label>
+                  <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Opsional</span>
+                </div>
+                <input
+                  type="text"
+                  value={modalTryoutIdentitas.asalSekolah}
+                  onChange={e => setModalTryoutIdentitas(prev => ({ ...prev, asalSekolah: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveTryoutIdentitas();
+                  }}
+                  className="w-full border-2 border-slate-200 p-3 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400"
+                  placeholder="Misal: SMPN 1 Jakarta / SMA Negeri 2"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-bold text-slate-700">Kelas Asli di Sekolah</label>
+                  <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Opsional</span>
+                </div>
+                <input
+                  type="text"
+                  value={modalTryoutIdentitas.kelasAsli}
+                  onChange={e => setModalTryoutIdentitas(prev => ({ ...prev, kelasAsli: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveTryoutIdentitas();
+                  }}
+                  className="w-full border-2 border-slate-200 p-3 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400 uppercase"
+                  placeholder="Misal: IX A / XII MIPA 1"
+                />
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-500 leading-relaxed">
+                ℹ️ <em>Catatan:</em> Asal sekolah dan kelas bersifat <strong>opsional</strong>. Pastikan Nama Lengkap sudah benar karena akan otomatis tercantum pada ranking nilai dan pencetakan hasil.
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              {!user.nama?.toLowerCase().startsWith('peserta tryout') && (
+                <button
+                  type="button"
+                  disabled={modalTryoutIdentitas.isSaving}
+                  onClick={() => setModalTryoutIdentitas(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all"
+                >
+                  Batal
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={modalTryoutIdentitas.isSaving}
+                onClick={handleSaveTryoutIdentitas}
+                className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold px-6 py-2.5 rounded-xl shadow-md shadow-indigo-600/30 text-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {modalTryoutIdentitas.isSaving ? 'Menyimpan...' : 'Simpan & Lanjutkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
