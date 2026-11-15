@@ -215,10 +215,11 @@ END $$;
 -- 15. DATA DEFAULT (Seed Initial Data)
 -- ==============================================================================
 
--- 15.1 Akun Admin Default (Jika belum ada)
+-- 15.1 Akun Admin Default (Membuat baru atau mereset password ke admin123)
 INSERT INTO public.users (username, password, nama, role) 
 VALUES ('admin', 'admin123', 'Administrator', 'admin')
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT (username) 
+DO UPDATE SET password = 'admin123', role = 'admin';
 
 -- 15.2 Master Pengaturan Sistem (Lengkap v4.2 - Multi-Provider AI & Exambro)
 INSERT INTO public.pengaturan (kunci, nilai) VALUES
